@@ -5,8 +5,18 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs"
 import { CoinsIcon, MessageSquareIcon, SquarePenIcon } from "lucide-react"
+import { cn } from "cn"
 
 import { Empty, EmptyDescription } from "@/components/ui/empty"
+import {
+  Popover,
+  PopoverClose,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import {
   Sidebar,
   SidebarContent,
@@ -22,6 +32,43 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import type { Game } from "@/lib/db/schema"
+
+function GamesMenu({
+  games,
+  pathname,
+  closeOnSelect = false,
+  className,
+  ...props
+}: React.ComponentProps<typeof SidebarMenu> & {
+  games: Pick<Game, "id" | "title">[]
+  pathname: string
+  closeOnSelect?: boolean
+}) {
+  return (
+    <SidebarMenu className={cn("gap-1", className)} {...props}>
+      {games.map((game) => {
+        const button = (
+          <SidebarMenuButton
+            isActive={pathname === `/games/${game.id}`}
+            render={<Link href={`/games/${game.id}`} />}
+          >
+            <span>{game.title}</span>
+          </SidebarMenuButton>
+        )
+
+        return (
+          <SidebarMenuItem key={game.id}>
+            {closeOnSelect ? (
+              <PopoverClose nativeButton={false} render={button} />
+            ) : (
+              button
+            )}
+          </SidebarMenuItem>
+        )
+      })}
+    </SidebarMenu>
+  )
+}
 
 export function AppSidebar({
   games,
@@ -70,22 +117,36 @@ export function AppSidebar({
                 </EmptyDescription>
               </Empty>
             ) : (
-              <SidebarMenu className="group-data-[collapsible=icon]:hidden">
-                {games.map((game) => (
-                  <SidebarMenuItem key={game.id}>
-                    <SidebarMenuButton>
-                      <span>{game.title}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
+              <GamesMenu
+                games={games}
+                pathname={pathname}
+                className="group-data-[collapsible=icon]:hidden"
+              />
             )}
             <SidebarMenu className="hidden group-data-[collapsible=icon]:flex">
               <SidebarMenuItem>
-                <SidebarMenuButton>
-                  <MessageSquareIcon />
-                  <span>Recents</span>
-                </SidebarMenuButton>
+                <Popover>
+                  <PopoverTrigger render={<SidebarMenuButton />}>
+                    <MessageSquareIcon />
+                    <span>Recents</span>
+                  </PopoverTrigger>
+                  <PopoverContent side="right" align="start" className="w-56">
+                    <PopoverHeader>
+                      <PopoverTitle>Recents</PopoverTitle>
+                    </PopoverHeader>
+                    {games.length === 0 ? (
+                      <PopoverDescription className="text-xs">
+                        Your games will live here.
+                      </PopoverDescription>
+                    ) : (
+                      <GamesMenu
+                        games={games}
+                        pathname={pathname}
+                        closeOnSelect
+                      />
+                    )}
+                  </PopoverContent>
+                </Popover>
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
