@@ -1,7 +1,11 @@
 import { auth } from "@clerk/nextjs/server"
 import Image from "next/image"
 
-import { ChatComposer } from "@/components/chat-composer"
+import {
+  ChatComposer,
+  ChatComposerProvider,
+  ChatSuggestion,
+} from "@/components/chat-composer"
 import {
   Empty,
   EmptyContent,
@@ -10,6 +14,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
+import { suggestions } from "@/lib/games/suggestions"
 
 export default async function Page() {
   await auth.protect()
@@ -29,8 +34,23 @@ export default async function Page() {
             own words. If you can describe it, you can play it.
           </EmptyDescription>
         </EmptyHeader>
-        <EmptyContent className="max-w-2xl">
-          <ChatComposer />
+        <EmptyContent className="max-w-2xl gap-6">
+          <ChatComposerProvider>
+            <ChatComposer />
+            <div className="flex flex-wrap justify-center gap-2">
+              {suggestions.map(({ icon: Icon, label }) => (
+                <ChatSuggestion
+                  key={label}
+                  label={label}
+                  variant="outline"
+                  className="rounded-full font-normal text-muted-foreground"
+                >
+                  <Icon data-icon="inline-start" />
+                  {label}
+                </ChatSuggestion>
+              ))}
+            </div>
+          </ChatComposerProvider>
         </EmptyContent>
       </Empty>
     </div>
