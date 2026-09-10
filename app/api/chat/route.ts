@@ -1,4 +1,4 @@
-import { anthropic } from "@ai-sdk/anthropic"
+import { google } from "@ai-sdk/google"
 import { auth } from "@clerk/nextjs/server"
 import {
   convertToModelMessages,
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   const { messages }: { messages: UIMessage[] } = await req.json()
 
   const result = streamText({
-    model: anthropic("claude-sonnet-5"),
+    model: google("gemini-flash-latest"),
     instructions: "You are a helpful assistant.",
     messages: await convertToModelMessages(messages),
   })
