@@ -2,8 +2,9 @@
 
 import { google } from "@ai-sdk/google"
 import { auth } from "@clerk/nextjs/server"
-import { generateText } from "ai"
+import { generateId, generateText } from "ai"
 import { refresh } from "next/cache"
+import { redirect } from "next/navigation"
 
 import { db } from "@/lib/db"
 import { games } from "@/lib/db/schema"
@@ -33,8 +34,24 @@ export async function createGame(input: string) {
   // Fall back to the raw prompt if the model returns nothing.
   const title = text.trim() || prompt
 
-  await db.insert(games).values({ orgId, title })
+  // Save the prompt as the thread's first message; the game page's ChatThread
+  // sees it unanswered and requests the reply.
+  const [game] = await db
+    .insert(games)
+    .values({
+      orgId,
+      title,
+      messages: [
+        {
+          id: generateId(),
+          role: "user",
+          parts: [{ type: "text", text: prompt }],
+        },
+      ],
+    })
+    .returning({ id: games.id })
 
   // Re-render the (app) layout so the sidebar picks up the new game.
   refresh()
+  redirect(`/games/${game.id}`)
 }

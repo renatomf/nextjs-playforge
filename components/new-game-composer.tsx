@@ -14,11 +14,11 @@ export function NewGameComposer() {
   const [prompt, setPrompt] = useState("")
   const [isPending, startTransition] = useTransition()
 
+  // createGame redirects to the new game, so the composer stays pending
+  // until the game page takes over.
   function handleSubmit(value: string) {
     startTransition(async () => {
       await createGame(value)
-      console.log("Game created:", value)
-      setPrompt("")
     })
   }
 
