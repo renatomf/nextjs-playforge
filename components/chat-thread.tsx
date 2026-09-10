@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Image from "next/image"
 import { useChat } from "@ai-sdk/react"
+import { DefaultChatTransport, type UIMessage } from "ai"
 
 import { ChatComposer } from "@/components/chat-composer"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
@@ -16,9 +17,23 @@ import {
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller"
 
-export function ChatThread() {
+type ChatThreadProps = {
+  id: string
+  initialMessages: UIMessage[]
+}
+
+export function ChatThread({ id, initialMessages }: ChatThreadProps) {
   const [input, setInput] = useState("")
-  const { messages, sendMessage, status, error } = useChat()
+  const { messages, sendMessage, status, error } = useChat({
+    id,
+    messages: initialMessages,
+    transport: new DefaultChatTransport({
+      // The server loads the saved thread, so only send the new message.
+      prepareSendMessagesRequest: ({ id, messages }) => ({
+        body: { id, message: messages[messages.length - 1] },
+      }),
+    }),
+  })
 
   const isPending = status === "submitted" || status === "streaming"
 

@@ -12,5 +12,5 @@ export default async function Page(props: PageProps<"/games/[id]">) {
 
   if (!game) notFound()
 
-  return <ChatThread />
+  return <ChatThread id={game.id} initialMessages={game.messages} />
 }

@@ -1,6 +1,14 @@
 // Drizzle schema: define tables here, then run `npm run db:push`.
 
-import { index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core"
+import type { UIMessage } from "ai"
+import {
+  index,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core"
 
 export const games = pgTable(
   "games",
@@ -9,6 +17,8 @@ export const games = pgTable(
     // Clerk organization ID (e.g. "org_..."); every query is scoped by it.
     orgId: text("org_id").notNull(),
     title: text().notNull(),
+    // The game's chat thread (one game = one chat), in AI SDK UIMessage format.
+    messages: jsonb().$type<UIMessage[]>().notNull().default([]),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
