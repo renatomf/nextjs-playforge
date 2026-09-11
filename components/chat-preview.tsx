@@ -54,6 +54,9 @@ export function ChatPreview({ gameId, revision }: ChatPreviewProps) {
         key={preview.revision}
         src={preview.url}
         title="Game preview"
+        // The preview is cross-origin, so these need explicit permission:
+        // gamepads, fullscreen, and sound before the first click.
+        allow="autoplay; fullscreen; gamepad"
         className="h-full w-full border-0"
       />
     )

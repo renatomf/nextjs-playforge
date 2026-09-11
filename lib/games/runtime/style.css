@@ -1,3 +1,4 @@
+/* A full-screen, non-scrolling page: a good base for any game. */
 *,
 *::before,
 *::after {
@@ -8,32 +9,79 @@ html,
 body {
   height: 100%;
   margin: 0;
+  overflow: hidden;
 }
 
 body {
-  display: grid;
-  place-items: center;
-  padding: 1.5rem;
-  background: #000000;
-  color: #000000;
+  background: #0b0b0d;
+  color: #f5f5f4;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-main {
-  max-width: 28rem;
+/* Welcome page. */
+.welcome {
+  background: radial-gradient(120% 85% at 50% 36%, #3d1707 0%, #1c0d06 40%, #0b0b0d 75%);
+}
+
+.welcome-copy {
+  position: fixed;
+  left: 50%;
+  bottom: max(6vh, 24px);
+  z-index: 1;
+  width: min(30rem, calc(100% - 32px));
+  transform: translateX(-50%);
   text-align: center;
+  pointer-events: none;
+  animation: welcome-in 0.8s cubic-bezier(0.2, 0.9, 0.3, 1) both;
 }
 
-h1 {
-  margin: 0 0 0.75rem;
+.welcome-copy h1 {
+  margin: 0 0 0.5rem;
   font-size: clamp(2rem, 6vw, 3rem);
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-weight: 800;
+  letter-spacing: -0.03em;
 }
 
-p {
+.welcome-copy p {
   margin: 0;
-  color: #94a3b8;
-  font-size: 1.125rem;
-  line-height: 1.6;
+  color: #a8a29e;
+  font-size: clamp(0.95rem, 2.4vw, 1.1rem);
+  line-height: 1.55;
+}
+
+.welcome-tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 1.1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.welcome-tags li {
+  padding: 0.3rem 0.75rem;
+  border: 1px solid rgba(234, 88, 12, 0.32);
+  border-radius: 999px;
+  background: rgba(234, 88, 12, 0.12);
+  color: #fdba74;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition:
+    opacity 0.4s,
+    transform 0.4s;
+}
+
+.welcome-tags .welcome-hint.is-done {
+  opacity: 0;
+  transform: scale(0.9);
+}
+
+@keyframes welcome-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
 }

@@ -5,11 +5,222 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>New game</title>
     <link rel="stylesheet" href="./style.css" />
+    <!-- Three.js from the CDN, pinned; the engine and "three/addons/..." imports resolve through it. -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.0/examples/jsm/"
+        }
+      }
+    </script>
+    <!-- Shows errors on the page; keep it first so it catches everything. -->
+    <script src="./engine/errors.js"></script>
   </head>
-  <body>
-    <main>
+  <body class="welcome">
+    <section class="welcome-copy">
       <h1>New game</h1>
-      <p>Nothing has been built yet - describe the game you want.</p>
-    </main>
+      <p>Nothing has been built yet. Describe the game you want in the chat and it will appear right here.</p>
+      <ul class="welcome-tags">
+        <li>3D engine ready</li>
+        <li>Three.js r186</li>
+        <li class="welcome-hint">Click the cube</li>
+      </ul>
+    </section>
+
+    <script type="module">
+      import * as THREE from "three"
+      import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js"
+      import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js"
+      import { Game, Particles, sound, damp, squash } from "./engine/index.js"
+
+      const ORANGE = "#EA580C"
+
+      // The logo (public/logo.svg) redrawn on a canvas, one per cube face.
+      function logoTexture(renderer) {
+        const size = 1024
+        const canvas = document.createElement("canvas")
+        canvas.width = canvas.height = size
+        const ctx = canvas.getContext("2d")
+        const unit = size / 48
+        ctx.scale(unit, unit)
+        ctx.fillStyle = ORANGE
+        ctx.fillRect(0, 0, 48, 48)
+        const sheen = ctx.createLinearGradient(24, 0, 26, 48)
+        sheen.addColorStop(0, "rgba(255,255,255,0)")
+        sheen.addColorStop(1, "rgba(255,255,255,0.12)")
+        ctx.fillStyle = sheen
+        ctx.fillRect(0, 0, 48, 48)
+
+        const faces = [
+          ["M24.5001 23.1948L37.4487 15.7241L24.5001 8.25L11.5513 15.7241L24.5001 23.1948Z", 1, 8.25],
+          ["M23.5738 24.7989L10.625 17.3282V32.2759L23.5738 39.75V24.7989Z", 1, 8.25],
+          ["M25.4277 24.7989V39.7499L38.3762 32.2759V17.3281L25.4277 24.7989Z", 0.5, 17.3281],
+        ]
+        // Canvas shadows ignore the transform, so they are given in pixels.
+        ctx.shadowColor = "rgba(36,36,36,0.25)"
+        ctx.shadowOffsetY = 2.25 * unit
+        ctx.shadowBlur = 4.5 * unit
+        for (const [path, opacity, top] of faces) {
+          const fill = ctx.createLinearGradient(24, top, 24, 39.75)
+          fill.addColorStop(0, "rgba(255,255,255,0.8)")
+          fill.addColorStop(1, "rgba(255,255,255,0.5)")
+          ctx.globalAlpha = opacity
+          ctx.fillStyle = fill
+          ctx.fill(new Path2D(path))
+        }
+
+        const texture = new THREE.CanvasTexture(canvas)
+        texture.colorSpace = THREE.SRGBColorSpace
+        texture.anisotropy = renderer.capabilities.getMaxAnisotropy()
+        return texture
+      }
+
+      // A soft orange halo behind the cube.
+      function glowTexture() {
+        const canvas = document.createElement("canvas")
+        canvas.width = canvas.height = 256
+        const ctx = canvas.getContext("2d")
+        const glow = ctx.createRadialGradient(128, 128, 0, 128, 128, 128)
+        glow.addColorStop(0, "rgba(234,88,12,0.55)")
+        glow.addColorStop(0.45, "rgba(234,88,12,0.16)")
+        glow.addColorStop(1, "rgba(234,88,12,0)")
+        ctx.fillStyle = glow
+        ctx.fillRect(0, 0, 256, 256)
+        const texture = new THREE.CanvasTexture(canvas)
+        texture.colorSpace = THREE.SRGBColorSpace
+        return texture
+      }
+
+      const game = new Game({ background: null, fov: 35 })
+      const { scene, camera, renderer } = game
+
+      const pmrem = new THREE.PMREMGenerator(renderer)
+      scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
+      scene.environmentIntensity = 0.9
+      pmrem.dispose()
+
+      const key = new THREE.DirectionalLight("#ffffff", 2.2)
+      key.position.set(4, 7, 5)
+      key.castShadow = true
+      key.shadow.mapSize.set(1024, 1024)
+      key.shadow.radius = 6
+      Object.assign(key.shadow.camera, { left: -4, right: 4, top: 4, bottom: -4, near: 1, far: 20 })
+      scene.add(key)
+      const rim = new THREE.PointLight(ORANGE, 40, 12)
+      rim.position.set(-3, 1.5, -3)
+      scene.add(rim)
+
+      // The hero cube: holder tilts toward the pointer and bobs, cube spins.
+      const holder = new THREE.Group()
+      holder.position.y = 0.55
+      const cube = new THREE.Mesh(
+        new RoundedBoxGeometry(2, 2, 2, 8, 0.3),
+        new THREE.MeshPhysicalMaterial({
+          map: logoTexture(renderer),
+          roughness: 0.35,
+          clearcoat: 1,
+          clearcoatRoughness: 0.18,
+        })
+      )
+      cube.castShadow = true
+      cube.rotation.set(0.5, 0.7, 0)
+      holder.add(cube)
+      game.add(holder)
+
+      const halo = new THREE.Sprite(
+        new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, depthWrite: false })
+      )
+      halo.scale.setScalar(9)
+      halo.position.set(0, 0.55, -2.5)
+      scene.add(halo)
+
+      const floor = new THREE.Mesh(
+        new THREE.PlaneGeometry(20, 20),
+        new THREE.ShadowMaterial({ opacity: 0.35 })
+      )
+      floor.rotation.x = -Math.PI / 2
+      floor.position.y = -1.6
+      floor.receiveShadow = true
+      scene.add(floor)
+
+      // Little cubes orbiting in the logo's colors.
+      const orbitCount = 42
+      const orbiters = new THREE.InstancedMesh(
+        new RoundedBoxGeometry(1, 1, 1, 2, 0.18),
+        new THREE.MeshStandardMaterial({ roughness: 0.4, metalness: 0.1 }),
+        orbitCount
+      )
+      orbiters.castShadow = true
+      const palette = [ORANGE, "#ffffff", "#fdba74", "#1c1917"].map((c) => new THREE.Color(c))
+      const orbitData = Array.from({ length: orbitCount }, (_, i) => ({
+        angle: (i / orbitCount) * Math.PI * 2 + Math.random() * 0.3,
+        radius: 2.9 + Math.random() * 1.6,
+        height: 0.55 + (Math.random() - 0.5) * 2.4,
+        speed: 0.12 + Math.random() * 0.18,
+        size: 0.1 + Math.random() * 0.18,
+        spin: new THREE.Vector3(Math.random(), Math.random(), Math.random()).multiplyScalar(2),
+      }))
+      orbitData.forEach((_, i) => orbiters.setColorAt(i, palette[i % palette.length]))
+      scene.add(orbiters)
+
+      const dummy = new THREE.Object3D()
+      game.onUpdate((dt) => {
+        for (let i = 0; i < orbitCount; i++) {
+          const o = orbitData[i]
+          o.angle += o.speed * dt
+          dummy.position.set(Math.cos(o.angle) * o.radius, o.height, Math.sin(o.angle) * o.radius)
+          dummy.rotation.set(o.spin.x * game.time.elapsed, o.spin.y * game.time.elapsed, o.spin.z * game.time.elapsed)
+          dummy.scale.setScalar(o.size)
+          dummy.updateMatrix()
+          orbiters.setMatrixAt(i, dummy.matrix)
+        }
+        orbiters.instanceMatrix.needsUpdate = true
+      })
+
+      const fx = new Particles(game, { max: 400 })
+      let spinSpeed = 0.5
+      let clicked = false
+
+      game.onUpdate((dt) => {
+        const { ndc } = game.input.pointer
+        const t = game.time.elapsed
+        spinSpeed = damp(spinSpeed, 0.5, 1.4, dt)
+        cube.rotation.y += spinSpeed * dt
+        cube.rotation.x = 0.5 + Math.sin(t * 0.6) * 0.12
+        holder.rotation.x = damp(holder.rotation.x, -ndc.y * 0.3, 3, dt)
+        holder.rotation.z = damp(holder.rotation.z, -ndc.x * 0.2, 3, dt)
+        holder.position.y = 0.55 + Math.sin(t * 1.3) * 0.12
+        halo.material.opacity = 0.85 + Math.sin(t * 1.3) * 0.15
+
+        const hovering = !!game.pick(cube, false)
+        game.canvas.style.cursor = hovering ? "pointer" : ""
+        if (game.input.pressed("Mouse0") && hovering) {
+          spinSpeed = 16
+          squash(game, cube, { amount: 0.18, duration: 0.45 })
+          fx.burst(holder.position, {
+            count: 60, colors: [ORANGE, "#ffffff", "#fdba74"], speed: 7, size: 0.14,
+            life: 1.2, gravity: -5, drag: 1.2, radius: 0.6,
+          })
+          game.shake(0.06, 0.25)
+          sound.play("powerup")
+          if (!clicked) {
+            clicked = true
+            const hint = document.querySelector(".welcome-hint")
+            hint?.classList.add("is-done")
+            setTimeout(() => hint?.remove(), 400)
+          }
+        }
+      })
+
+      // Fit the cube and its orbit on narrow (portrait) screens too.
+      const frame = () => {
+        const distance = game.aspect < 1.2 ? 13 / Math.pow(game.aspect / 1.2, 0.9) : 13
+        camera.position.set(0, 1.2, Math.min(distance, 30))
+        camera.lookAt(0, -0.35, 0)
+      }
+      game.on("resize", frame)
+      frame()
+    </script>
   </body>
 </html>
