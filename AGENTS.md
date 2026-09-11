@@ -11,3 +11,9 @@ This project is in development and has no backwards-compatibility requirements, 
 - **Always** apply schema changes with `npm run db:push` (`drizzle-kit push`).
 - **Never** run `drizzle-kit migrate` or `drizzle-kit generate`, and do not add `db:migrate`/`db:generate` scripts back.
 - Do not create or commit migration files (`drizzle/` folder, `drizzle.__drizzle_migrations` table).
+
+<!-- TRIGGER.DEV SKILLS START -->
+## Trigger.dev agent skills
+
+This project has Trigger.dev agent skills installed in `.agents/skills/`. Before writing or changing Trigger.dev code (background tasks, scheduled tasks, realtime, or chat.agent AI agents), load the most relevant skill: `trigger-authoring-chat-agent`, `trigger-authoring-tasks`, `trigger-cost-savings`, `trigger-getting-started`, `trigger-chat-agent-advanced`, `trigger-realtime-and-frontend`.
+<!-- TRIGGER.DEV SKILLS END -->
