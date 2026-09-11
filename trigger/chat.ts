@@ -3,6 +3,7 @@ import { streamText, type UIMessage } from "ai"
 
 import { chatModel } from "@/lib/ai/models"
 import { createGameSandbox } from "@/lib/daytona/utils"
+import { gameInstructions } from "@/lib/games/instructions"
 import { getGameMessages, saveGameMessages } from "@/lib/games/messages"
 
 // A turn that fails before the model writes anything (e.g. the provider is
@@ -56,7 +57,7 @@ export const gameChat = chat.agent({
       // Spread first so the options below still win.
       ...chat.toStreamTextOptions(),
       model: chatModel,
-      instructions: "You are a helpful assistant.",
+      instructions: gameInstructions,
       messages,
       abortSignal: signal,
     }),
