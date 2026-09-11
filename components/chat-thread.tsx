@@ -35,6 +35,8 @@ type ChatThreadProps = {
   initialMessages: UIMessage[]
   // The game's chat session, once it has one; lets a reload resume the stream.
   initialSession?: { publicAccessToken: string; lastEventId: string }
+  // Called each time the agent finishes a turn that replied on this page.
+  onTurnComplete?: () => void
 }
 
 type ToolCallState = "active" | "done" | "failed"
@@ -118,14 +120,29 @@ export function ChatThread({
   id,
   initialMessages,
   initialSession,
+  onTurnComplete,
 }: ChatThreadProps) {
   const [input, setInput] = useState("")
+
+  // Set when the agent streams the start of a reply. Reconnecting to a settled
+  // chat on load replays the last turn-complete with nothing before it, and
+  // that one isn't a new turn.
+  const hasStreamedReply = useRef(false)
+
   const transport = useTriggerChatTransport<typeof gameChat>({
     task: "game-chat",
     accessToken: ({ chatId }) => mintChatAccessToken(chatId),
     startSession: ({ chatId, clientData }) =>
       startChatSession({ chatId, clientData }),
     sessions: initialSession && { [id]: initialSession },
+    onEvent: (event) => {
+      if (event.type === "first-chunk") {
+        hasStreamedReply.current = true
+      } else if (event.type === "turn-completed" && hasStreamedReply.current) {
+        hasStreamedReply.current = false
+        onTurnComplete?.()
+      }
+    },
   })
   const { messages, sendMessage, regenerate, stop, status, error } = useChat({
     id,
