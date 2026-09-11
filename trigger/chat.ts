@@ -2,6 +2,7 @@ import { google } from "@ai-sdk/google"
 import { chat, upsertIncomingMessage } from "@trigger.dev/sdk/ai"
 import { streamText, type UIMessage } from "ai"
 
+import { createGameSandbox } from "@/lib/daytona/utils"
 import { getGameMessages, saveGameMessages } from "@/lib/games/messages"
 
 // A turn that fails before the model writes anything (e.g. the provider is
@@ -37,6 +38,10 @@ export const gameChat = chat.agent({
     }
 
     return messages
+  },
+  // Fires once per chat, on its first message: give the game its sandbox.
+  onChatStart: async ({ chatId }) => {
+    await createGameSandbox(chatId)
   },
   onTurnComplete: async ({ chatId, uiMessages, lastEventId }) => {
     // Always save the cursor, even for a failed turn, so a reload resumes past it.

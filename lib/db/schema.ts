@@ -22,6 +22,8 @@ export const games = pgTable(
     // Trigger.dev chat stream cursor, saved with `messages` after each turn so
     // a reload resumes the stream where the saved thread ends.
     lastEventId: text("last_event_id"),
+    // The game's Daytona sandbox, created when its chat starts.
+    sandboxId: text("sandbox_id"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
