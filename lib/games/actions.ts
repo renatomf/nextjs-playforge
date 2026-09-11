@@ -2,12 +2,57 @@
 
 import { google } from "@ai-sdk/google"
 import { auth } from "@clerk/nextjs/server"
+import { auth as triggerAuth } from "@trigger.dev/sdk"
+import { chat, type ChatStartSessionParams } from "@trigger.dev/sdk/ai"
 import { generateId, generateText } from "ai"
 import { refresh } from "next/cache"
 import { redirect } from "next/navigation"
 
 import { db } from "@/lib/db"
 import { games } from "@/lib/db/schema"
+import { getGame } from "@/lib/games/queries"
+import type { gameChat } from "@/trigger/chat"
+
+const startGameChatSession =
+  chat.createStartSessionAction<typeof gameChat>("game-chat")
+
+// The chat id is the game id, and it comes from the browser: only let the
+// caller chat about games in their own org.
+async function assertCanChat(gameId: string) {
+  const { userId } = await auth()
+
+  if (!userId) {
+    throw new Error("Unauthorized")
+  }
+
+  if (!(await getGame(gameId))) {
+    throw new Error("Not found")
+  }
+}
+
+// Creates the game's chat session and its first run, and returns a
+// session-scoped token. Idempotent per chat id.
+export async function startChatSession({
+  chatId,
+  clientData,
+}: ChatStartSessionParams<typeof gameChat>) {
+  await assertCanChat(chatId)
+
+  return startGameChatSession({ chatId, clientData })
+}
+
+// Mints a fresh session-scoped token; the transport calls this to refresh.
+export async function mintChatAccessToken(chatId: string) {
+  await assertCanChat(chatId)
+
+  return triggerAuth.createPublicToken({
+    scopes: {
+      read: { sessions: chatId },
+      write: { sessions: chatId },
+    },
+    expirationTime: "1h",
+  })
+}
 
 export async function createGame(input: string) {
   const { orgId } = await auth()

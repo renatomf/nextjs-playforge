@@ -19,4 +19,9 @@ export default defineConfig({
     },
   },
   dirs: ["trigger"],
+  build: {
+    // Tasks share lib/ with the Next.js server, whose modules import
+    // "server-only"; this condition resolves it to its no-op build.
+    conditions: ["react-server"],
+  },
 });

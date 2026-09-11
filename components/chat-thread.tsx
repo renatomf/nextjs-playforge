@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react"
 import Image from "next/image"
 import { useChat } from "@ai-sdk/react"
-import { DefaultChatTransport, type UIMessage } from "ai"
+import { useTriggerChatTransport } from "@trigger.dev/sdk/chat/react"
+import type { UIMessage } from "ai"
 
 import { ChatComposer } from "@/components/chat-composer"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
@@ -16,42 +17,50 @@ import {
   MessageScrollerProvider,
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller"
+import { mintChatAccessToken, startChatSession } from "@/lib/games/actions"
+import type { gameChat } from "@/trigger/chat"
 
 type ChatThreadProps = {
   id: string
   initialMessages: UIMessage[]
+  // The game's chat session, once it has one; lets a reload resume the stream.
+  initialSession?: { publicAccessToken: string; lastEventId: string }
 }
 
-export function ChatThread({ id, initialMessages }: ChatThreadProps) {
+export function ChatThread({
+  id,
+  initialMessages,
+  initialSession,
+}: ChatThreadProps) {
   const [input, setInput] = useState("")
+  const transport = useTriggerChatTransport<typeof gameChat>({
+    task: "game-chat",
+    accessToken: ({ chatId }) => mintChatAccessToken(chatId),
+    startSession: ({ chatId, clientData }) =>
+      startChatSession({ chatId, clientData }),
+    sessions: initialSession && { [id]: initialSession },
+  })
   const { messages, sendMessage, regenerate, status, error } = useChat({
     id,
     messages: initialMessages,
-    transport: new DefaultChatTransport({
-      // The server loads the saved thread, so only send the new message. A
-      // regenerate replies to the saved thread as-is, so it sends none.
-      prepareSendMessagesRequest: ({ id, messages, trigger }) => ({
-        body:
-          trigger === "submit-message"
-            ? { id, message: messages[messages.length - 1] }
-            : { id },
-      }),
-    }),
+    transport,
+    // Pick up a reply that was still streaming when the page was reloaded.
+    resume: initialSession !== undefined,
   })
 
   // A thread ending in a user message has no reply yet (e.g. the prompt saved
   // by createGame), so request one. The ref stops Strict Mode's double effect
-  // from sending it twice.
+  // from sending it twice. A resumed session is already answering it.
   const hasRequestedReply = useRef(false)
 
   useEffect(() => {
     if (hasRequestedReply.current) return
     hasRequestedReply.current = true
 
-    if (initialMessages.at(-1)?.role === "user") {
+    if (initialMessages.at(-1)?.role === "user" && !initialSession) {
       regenerate()
     }
-  }, [initialMessages, regenerate])
+  }, [initialMessages, initialSession, regenerate])
 
   const isPending = status === "submitted" || status === "streaming"
 

@@ -19,6 +19,9 @@ export const games = pgTable(
     title: text().notNull(),
     // The game's chat thread (one game = one chat), in AI SDK UIMessage format.
     messages: jsonb().$type<UIMessage[]>().notNull().default([]),
+    // Trigger.dev chat stream cursor, saved with `messages` after each turn so
+    // a reload resumes the stream where the saved thread ends.
+    lastEventId: text("last_event_id"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
