@@ -1,7 +1,7 @@
-import { google } from "@ai-sdk/google"
 import { chat, upsertIncomingMessage } from "@trigger.dev/sdk/ai"
 import { streamText, type UIMessage } from "ai"
 
+import { chatModel } from "@/lib/ai/models"
 import { createGameSandbox } from "@/lib/daytona/utils"
 import { getGameMessages, saveGameMessages } from "@/lib/games/messages"
 
@@ -55,7 +55,7 @@ export const gameChat = chat.agent({
     streamText({
       // Spread first so the options below still win.
       ...chat.toStreamTextOptions(),
-      model: google("gemini-flash-latest"),
+      model: chatModel,
       instructions: "You are a helpful assistant.",
       messages,
       abortSignal: signal,

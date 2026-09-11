@@ -1,6 +1,5 @@
 "use server"
 
-import { google } from "@ai-sdk/google"
 import { auth } from "@clerk/nextjs/server"
 import { auth as triggerAuth } from "@trigger.dev/sdk"
 import { chat, type ChatStartSessionParams } from "@trigger.dev/sdk/ai"
@@ -8,6 +7,7 @@ import { generateId, generateText } from "ai"
 import { refresh } from "next/cache"
 import { redirect } from "next/navigation"
 
+import { titleModel } from "@/lib/ai/models"
 import { db } from "@/lib/db"
 import { games } from "@/lib/db/schema"
 import { getGame } from "@/lib/games/queries"
@@ -68,7 +68,7 @@ export async function createGame(input: string) {
   }
 
   const { text } = await generateText({
-    model: google("gemini-flash-lite-latest"),
+    model: titleModel,
     instructions:
       "Write a short title (at most 6 words) for a game based on the user's " +
       "description. Reply with the title only, without quotes.",
