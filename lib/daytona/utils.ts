@@ -1,6 +1,6 @@
 import "server-only"
 
-import type { Sandbox } from "@daytona/sdk"
+import { DaytonaNotFoundError, type Sandbox } from "@daytona/sdk"
 import { eq } from "drizzle-orm"
 
 import { daytona } from "@/lib/daytona/client"
@@ -23,7 +23,7 @@ export async function createGameSandbox(gameId: string) {
     .set({ sandboxId: sandbox.id })
     .where(eq(games.id, gameId))
 
-  return sandbox
+  return { sandbox }
 }
 
 // Idle sandboxes auto-stop, so wake the game's sandbox before using it.
@@ -36,7 +36,33 @@ async function getStartedSandbox(sandboxId: string) {
     await sandbox.start()
   }
 
-  return sandbox
+  return { sandbox }
+}
+
+// For the chat agent's tools: returns the game's sandbox, started and ready to
+// use. Creates one if the game has none yet, or if its sandbox was deleted
+// (that one's files are gone, so the game starts over from a fresh page).
+// Runs outside any request, so the game isn't scoped to a Clerk org here.
+export async function getGameSandbox(gameId: string) {
+  const [game] = await db
+    .select({ sandboxId: games.sandboxId })
+    .from(games)
+    .where(eq(games.id, gameId))
+    .limit(1)
+
+  if (!game) {
+    throw new Error("Game not found")
+  }
+
+  if (game.sandboxId) {
+    try {
+      return await getStartedSandbox(game.sandboxId)
+    } catch (error) {
+      if (!(error instanceof DaytonaNotFoundError)) throw error
+    }
+  }
+
+  return createGameSandbox(gameId)
 }
 
 async function isGameServerUp(sandbox: Sandbox) {
@@ -51,7 +77,7 @@ async function isGameServerUp(sandbox: Sandbox) {
 // server that is already up; a restarted sandbox has lost its server, so that
 // starts a new one.
 export async function startGameServer(sandboxId: string) {
-  const sandbox = await getStartedSandbox(sandboxId)
+  const { sandbox } = await getStartedSandbox(sandboxId)
 
   if (await isGameServerUp(sandbox)) return { sandbox }
 
