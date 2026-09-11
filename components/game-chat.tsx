@@ -10,7 +10,16 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable"
 
-export function GameChat(props: ComponentProps<typeof ChatThread>) {
+type GameChatProps = ComponentProps<typeof ChatThread> & {
+  // Only a game with a sandbox has something to preview.
+  hasSandbox: boolean
+}
+
+export function GameChat({ hasSandbox, ...props }: GameChatProps) {
+  if (!hasSandbox) {
+    return <ChatThread {...props} />
+  }
+
   return (
     <ResizablePanelGroup>
       <ResizablePanel>
@@ -18,7 +27,7 @@ export function GameChat(props: ComponentProps<typeof ChatThread>) {
       </ResizablePanel>
       <ResizableHandle withHandle />
       <ResizablePanel>
-        <ChatPreview />
+        <ChatPreview gameId={props.id} />
       </ResizablePanel>
     </ResizablePanelGroup>
   )

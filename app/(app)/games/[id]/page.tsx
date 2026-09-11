@@ -27,6 +27,7 @@ export default async function Page(props: PageProps<"/games/[id]">) {
       id={game.id}
       initialMessages={game.messages}
       initialSession={initialSession}
+      hasSandbox={game.sandboxId !== null}
     />
   )
 }
