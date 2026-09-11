@@ -40,7 +40,7 @@ export function ChatThread({
       startChatSession({ chatId, clientData }),
     sessions: initialSession && { [id]: initialSession },
   })
-  const { messages, sendMessage, regenerate, status, error } = useChat({
+  const { messages, sendMessage, regenerate, stop, status, error } = useChat({
     id,
     messages: initialMessages,
     transport,
@@ -67,6 +67,13 @@ export function ChatThread({
   function handleSubmit(value: string) {
     sendMessage({ text: value })
     setInput("")
+  }
+
+  // useChat's stop() only closes the local stream, and after a resume it never
+  // reaches the agent, so also tell the run to abort its reply.
+  function handleStop() {
+    transport.stopGeneration(id)
+    stop()
   }
 
   return (
@@ -137,6 +144,7 @@ export function ChatThread({
           value={input}
           onValueChange={setInput}
           onSubmit={handleSubmit}
+          onStop={handleStop}
           isPending={isPending}
           placeholder="Ask for a change..."
         />

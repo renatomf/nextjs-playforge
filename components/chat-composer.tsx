@@ -1,6 +1,11 @@
 "use client"
 
-import { ArrowUpIcon, ChevronDownIcon, GripHorizontalIcon } from "lucide-react"
+import {
+  ArrowUpIcon,
+  ChevronDownIcon,
+  GripHorizontalIcon,
+  SquareIcon,
+} from "lucide-react"
 
 import {
   DropdownMenu,
@@ -21,6 +26,8 @@ type ChatComposerProps = {
   value: string
   onValueChange: (value: string) => void
   onSubmit: (value: string) => void
+  // While pending, the submit button becomes a stop button that calls this.
+  onStop?: () => void
   isPending?: boolean
   placeholder?: string
 }
@@ -29,6 +36,7 @@ export function ChatComposer({
   value,
   onValueChange,
   onSubmit,
+  onStop,
   isPending = false,
   placeholder = "Describe the game you want to build...",
 }: ChatComposerProps) {
@@ -76,15 +84,33 @@ export function ChatComposer({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          <InputGroupButton
-            type="submit"
-            variant="default"
-            size="icon-sm"
-            className="ml-auto rounded-full"
-            disabled={!canSubmit}
-          >
-            <ArrowUpIcon />
-          </InputGroupButton>
+          {/* Distinct keys so React swaps the element instead of flipping its
+              type mid-click, which could submit the form right after a stop. */}
+          {isPending && onStop ? (
+            <InputGroupButton
+              key="stop"
+              type="button"
+              variant="default"
+              size="icon-sm"
+              className="ml-auto rounded-full"
+              onClick={onStop}
+              aria-label="Stop generating"
+            >
+              <SquareIcon className="fill-current" />
+            </InputGroupButton>
+          ) : (
+            <InputGroupButton
+              key="submit"
+              type="submit"
+              variant="default"
+              size="icon-sm"
+              className="ml-auto rounded-full"
+              disabled={!canSubmit}
+              aria-label="Send message"
+            >
+              <ArrowUpIcon />
+            </InputGroupButton>
+          )}
         </InputGroupAddon>
       </InputGroup>
     </form>
