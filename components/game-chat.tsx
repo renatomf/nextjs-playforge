@@ -16,19 +16,23 @@ type GameChatProps = ComponentProps<typeof ChatThread> & {
 }
 
 export function GameChat({ hasSandbox, ...props }: GameChatProps) {
-  if (!hasSandbox) {
-    return <ChatThread {...props} />
-  }
-
+  // The one element with a fixed height: the thread and preview fill it, so a
+  // long conversation scrolls inside the message scroller, not the page.
   return (
-    <ResizablePanelGroup>
-      <ResizablePanel>
+    <div className="h-svh">
+      {hasSandbox ? (
+        <ResizablePanelGroup>
+          <ResizablePanel>
+            <ChatThread {...props} />
+          </ResizablePanel>
+          <ResizableHandle withHandle />
+          <ResizablePanel>
+            <ChatPreview gameId={props.id} />
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      ) : (
         <ChatThread {...props} />
-      </ResizablePanel>
-      <ResizableHandle withHandle />
-      <ResizablePanel>
-        <ChatPreview gameId={props.id} />
-      </ResizablePanel>
-    </ResizablePanelGroup>
+      )}
+    </div>
   )
 }

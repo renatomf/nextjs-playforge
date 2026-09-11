@@ -40,13 +40,13 @@ export function ChatPreview({ gameId }: { gameId: string }) {
       <iframe
         src={preview.url}
         title="Game preview"
-        className="h-svh w-full border-0"
+        className="h-full w-full border-0"
       />
     )
   }
 
   return (
-    <div className="flex h-svh items-center justify-center text-sm text-muted-foreground">
+    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
       {preview.status === "loading" ? (
         <Spinner className="size-6" />
       ) : (
