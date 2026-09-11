@@ -1,3 +1,4 @@
+import { additionalFiles } from "@trigger.dev/build/extensions/core";
 import { defineConfig } from "@trigger.dev/sdk";
 
 export default defineConfig({
@@ -19,9 +20,17 @@ export default defineConfig({
     },
   },
   dirs: ["trigger"],
+  // Makes process.cwd() the build directory in dev too, as it is when
+  // deployed, so tasks find the additionalFiles below at the same path.
+  legacyDevProcessCwdBehaviour: false,
   build: {
     // Tasks share lib/ with the Next.js server, whose modules import
     // "server-only"; this condition resolves it to its no-op build.
     conditions: ["react-server"],
+    extensions: [
+      // Seed files for new game sandboxes. They're read with fs, never
+      // imported, so the bundle would leave them out otherwise.
+      additionalFiles({ files: ["lib/games/runtime/**"] }),
+    ],
   },
 });
