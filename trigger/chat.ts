@@ -38,8 +38,15 @@ export const gameChat = chat.agent({
       await saveGameMessages(chatId, messages)
     }
 
-    // Only a user message can be replied to.
-    if (messages.at(-1)?.role !== "user") {
+    // Reply to a new user message, or resume the assistant message whose
+    // pending tool call (e.g. ask_player) the player just answered. The
+    // runtime merges their answer into it after this hook returns.
+    const last = messages.at(-1)
+    const isResume =
+      last?.role === "assistant" &&
+      incomingMessages.some((message) => message.id === last.id)
+
+    if (last?.role !== "user" && !isResume) {
       throw new Error("Nothing to reply to")
     }
 

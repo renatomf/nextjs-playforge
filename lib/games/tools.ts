@@ -7,6 +7,7 @@ import { tool } from "ai"
 import { z } from "zod"
 
 import { GAME_DIR, getGameSandbox } from "@/lib/daytona/utils"
+import { askPlayer } from "@/lib/games/ask-player"
 
 // How deep list_files walks. Games are small, so this covers every file.
 const LIST_DEPTH = 10
@@ -50,8 +51,8 @@ function countOccurrences(text: string, search: string) {
   return text.split(search).length - 1
 }
 
-// The chat agent's file tools, bound to one game. Every path is confined to
-// the game directory in that game's sandbox.
+// The chat agent's tools: the file tools, bound to one game, plus ask_player.
+// Every path is confined to the game directory in that game's sandbox.
 export function createGameTools(gameId: string) {
   // All tool calls in a turn share one lookup of the sandbox. A failed lookup
   // isn't cached, so the next call tries again.
@@ -196,5 +197,7 @@ export function createGameTools(gameId: string) {
         return { path: toGamePath(resolved), deleted: true }
       },
     }),
+
+    ask_player: askPlayer,
   }
 }

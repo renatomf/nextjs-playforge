@@ -29,6 +29,8 @@ type ChatComposerProps = {
   // While pending, the submit button becomes a stop button that calls this.
   onStop?: () => void
   isPending?: boolean
+  // Blocks typing and sending, e.g. while the chat waits on another answer.
+  disabled?: boolean
   placeholder?: string
 }
 
@@ -38,9 +40,10 @@ export function ChatComposer({
   onSubmit,
   onStop,
   isPending = false,
+  disabled = false,
   placeholder = "Describe the game you want to build...",
 }: ChatComposerProps) {
-  const canSubmit = value.trim().length > 0 && !isPending
+  const canSubmit = value.trim().length > 0 && !isPending && !disabled
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -68,6 +71,7 @@ export function ChatComposer({
             }
           }}
           placeholder={placeholder}
+          disabled={disabled}
           rows={1}
           className="field-sizing-content max-h-48 min-h-10"
         />
