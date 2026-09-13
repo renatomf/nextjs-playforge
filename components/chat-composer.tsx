@@ -47,6 +47,7 @@ export function ChatComposer({
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    
     if (!canSubmit) return
 
     onSubmit(value)

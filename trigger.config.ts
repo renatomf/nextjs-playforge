@@ -1,3 +1,5 @@
+import { sentryEsbuildPlugin } from "@sentry/esbuild-plugin";
+import { esbuildPlugin } from "@trigger.dev/build/extensions";
 import { additionalFiles } from "@trigger.dev/build/extensions/core";
 import { defineConfig } from "@trigger.dev/sdk";
 
@@ -31,6 +33,16 @@ export default defineConfig({
       // Seed files for new game sandboxes. They're read with fs, never
       // imported, so the bundle would leave them out otherwise.
       additionalFiles({ files: ["lib/games/runtime/**"] }),
+      // Uploads the deployed bundle's source maps so Sentry shows readable
+      // stack traces for task errors. Needs SENTRY_AUTH_TOKEN when deploying.
+      esbuildPlugin(
+        sentryEsbuildPlugin({
+          org: process.env.SENTRY_ORG ?? "ammodev",
+          project: process.env.SENTRY_PROJECT ?? "sandbox",
+          authToken: process.env.SENTRY_AUTH_TOKEN,
+        }),
+        { placement: "last", target: "deploy" }
+      ),
     ],
   },
 });

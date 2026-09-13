@@ -13,6 +13,12 @@ function ThemeProvider({
       defaultTheme="system"
       enableSystem
       disableTransitionOnChange
+      // The theme script only needs to run from the server HTML (it prevents a
+      // flash of the wrong theme). When React renders it on the client it never
+      // runs, and React 19 warns about it, so mark it as a data block there.
+      scriptProps={{
+        type: typeof window === "undefined" ? undefined : "application/json",
+      }}
       {...props}
     >
       <ThemeHotkey />

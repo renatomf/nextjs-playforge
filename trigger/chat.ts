@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/node"
 import { chat, upsertIncomingMessage } from "@trigger.dev/sdk/ai"
 import { isStepCount, streamText, type UIMessage } from "ai"
 
@@ -56,13 +57,27 @@ export const gameChat = chat.agent({
   onChatStart: async ({ chatId }) => {
     await createGameSandbox(chatId)
   },
-  onTurnComplete: async ({ chatId, uiMessages, lastEventId }) => {
+  onTurnComplete: async ({ chatId, uiMessages, lastEventId, error }) => {
+    // A failed turn ends with an error chunk but doesn't fail the run, so the
+    // global onFailure hook (trigger/init.ts) never sees it: report it here.
+    if (error) {
+      Sentry.captureException(error, { tags: { chat_id: chatId } })
+    }
+
     // Always save the cursor, even for a failed turn, so a reload resumes past it.
     await saveGameMessages(chatId, withoutEmptyReplies(uiMessages), lastEventId)
+
+    if (error) {
+      await Sentry.flush(2000)
+    }
   },
   uiMessageStreamOptions: {
-    // Don't send raw error details (keys, stack traces) to the browser.
-    onError: () => "An error occurred.",
+    // Don't send raw error details (keys, stack traces) to the browser; they
+    // go to Sentry instead.
+    onError: (error) => {
+      Sentry.captureException(error)
+      return "An error occurred."
+    },
   },
   // Resolved each turn, so the file tools are bound to this game's sandbox.
   tools: ({ chatId }) => createGameTools(chatId),
