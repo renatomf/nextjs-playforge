@@ -16,8 +16,10 @@
     "trigger:deploy": "trigger deploy"
   },
   "dependencies": {
+    "@ai-sdk/alibaba": "^2.0.45",
     "@ai-sdk/anthropic": "^4.0.52",
     "@ai-sdk/google": "^4.0.67",
+    "@ai-sdk/groq": "^4.0.41",
     "@ai-sdk/react": "^4.0.100",
     "@base-ui/react": "^1.8.0",
     "@clerk/nextjs": "^7.9.1",
