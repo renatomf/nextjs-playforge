@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server"
 import { notFound } from "next/navigation"
 
 import { GameChat } from "@/components/game-chat"
+import { isGameModelId } from "@/lib/ai/model-catalog"
 import { mintChatAccessToken } from "@/lib/games/actions"
 import { getGame } from "@/lib/games/queries"
 
@@ -9,6 +10,7 @@ export default async function Page(props: PageProps<"/games/[id]">) {
   await auth.protect({ unauthenticatedUrl: "/sign-in" })
 
   const { id } = await props.params
+  const { model } = await props.searchParams
   const game = await getGame(id)
 
   if (!game) notFound()
@@ -22,11 +24,16 @@ export default async function Page(props: PageProps<"/games/[id]">) {
       }
     : undefined
 
+  // The model picked on the home page, which createGame puts in the URL.
+  // Anything else leaves the chat on the default model.
+  const initialModelId = isGameModelId(model) ? model : undefined
+
   return (
     <GameChat
       id={game.id}
       initialMessages={game.messages}
       initialSession={initialSession}
+      initialModelId={initialModelId}
       hasSandbox={game.sandboxId !== null}
     />
   )

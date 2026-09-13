@@ -22,8 +22,9 @@ export const chatModels = {
   "gemini-3.8-flash": google("gemini-3.8-flash"),
   "openai/gpt-oss-120b": groq("openai/gpt-oss-120b"),
   "qwen3.8-max": alibaba("qwen3.8-max"),
-  // No key: needs a local Ollama server (`ollama pull glm-4.7-flash`).
-  "glm-4.7-flash": ollama("glm-4.7-flash"),
+  // No key: needs a local Ollama server (`ollama pull qwen3:8b`). Small enough
+  // for a 6 GB GPU, unlike larger local models.
+  "qwen3:8b": ollama("qwen3:8b"),
 } satisfies Record<GameModelId, LanguageModel>
 
 export const titleModel = anthropic("claude-haiku-4-5")

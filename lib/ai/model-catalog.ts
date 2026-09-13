@@ -22,14 +22,19 @@ export const GAME_MODELS = [
     tagline: "Alibaba's flagship - a solid all-round builder.",
   },
   {
-    id: "glm-4.7-flash",
-    name: "GLM 4.7 Flash",
-    tagline: "Runs on your own machine - free and private.",
+    id: "qwen3:8b",
+    name: "Qwen3 8B (local)",
+    tagline: "Runs on your own machine - free and private, for small tweaks.",
   },
 ] as const
 
 export type GameModelId = (typeof GAME_MODELS)[number]["id"]
 
 export const GAME_MODEL_IDS = GAME_MODELS.map((model) => model.id)
+
+// For ids from outside the app's code, like a URL or a server action argument.
+export function isGameModelId(value: unknown): value is GameModelId {
+  return GAME_MODELS.some((model) => model.id === value)
+}
 
 export const DEFAULT_GAME_MODEL_ID: GameModelId = "claude-opus-5"

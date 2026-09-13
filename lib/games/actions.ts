@@ -8,6 +8,7 @@ import { generateId, generateText } from "ai"
 import { refresh } from "next/cache"
 import { redirect } from "next/navigation"
 
+import { isGameModelId, type GameModelId } from "@/lib/ai/model-catalog"
 import { titleModel } from "@/lib/ai/models"
 import { db } from "@/lib/db"
 import { games } from "@/lib/db/schema"
@@ -64,7 +65,8 @@ export async function mintChatAccessToken(chatId: string) {
   })
 }
 
-export async function createGame(input: string) {
+// modelId is the model picked on the home page; the game's chat starts with it.
+export async function createGame(input: string, modelId: GameModelId) {
   const { userId, orgId } = await auth()
 
   if (!userId || !orgId) {
@@ -120,7 +122,13 @@ export async function createGame(input: string) {
     "game.title_duration_ms": titleDurationMs,
   })
 
+  // The picked model rides along in the URL rather than being saved; the game
+  // page hands it to the chat. It comes from the browser, so check it.
+  const search = isGameModelId(modelId)
+    ? `?${new URLSearchParams({ model: modelId })}`
+    : ""
+
   // Re-render the (app) layout so the sidebar picks up the new game.
   refresh()
-  redirect(`/games/${game.id}`)
+  redirect(`/games/${game.id}${search}`)
 }

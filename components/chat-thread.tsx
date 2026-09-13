@@ -41,6 +41,7 @@ import {
   QuestionnaireTitle,
 } from "@/components/ui/questionnaire"
 import { Spinner } from "@/components/ui/spinner"
+import { DEFAULT_GAME_MODEL_ID, type GameModelId } from "@/lib/ai/model-catalog"
 import type { askPlayer } from "@/lib/games/ask-player"
 import { mintChatAccessToken, startChatSession } from "@/lib/games/actions"
 import type { gameChat } from "@/trigger/chat"
@@ -50,6 +51,8 @@ type ChatThreadProps = {
   initialMessages: UIMessage[]
   // The game's chat session, once it has one; lets a reload resume the stream.
   initialSession?: { publicAccessToken: string; lastEventId: string }
+  // The model the chat starts with, e.g. the one picked on the home page.
+  initialModelId?: GameModelId
   // Called each time the agent finishes a turn that replied on this page.
   onTurnComplete?: () => void
 }
@@ -230,9 +233,11 @@ export function ChatThread({
   id,
   initialMessages,
   initialSession,
+  initialModelId = DEFAULT_GAME_MODEL_ID,
   onTurnComplete,
 }: ChatThreadProps) {
   const [input, setInput] = useState("")
+  const [modelId, setModelId] = useState(initialModelId)
 
   // Set when the agent streams the start of a reply. Reconnecting to a settled
   // chat on load replays the last turn-complete with nothing before it, and
@@ -244,6 +249,9 @@ export function ChatThread({
     accessToken: ({ chatId }) => mintChatAccessToken(chatId),
     startSession: ({ chatId, clientData }) =>
       startChatSession({ chatId, clientData }),
+    // Sent with every message, so each reply uses the model picked when it was
+    // requested (see trigger/chat.ts).
+    clientData: { model: modelId },
     sessions: initialSession && { [id]: initialSession },
     onEvent: (event) => {
       if (event.type === "first-chunk") {
@@ -368,7 +376,10 @@ export function ChatThread({
 
                                 // Only the last message's question still waits
                                 // on the player; it opens once the reply ends.
-                                if (part.state === "input-available" && isLast) {
+                                if (
+                                  part.state === "input-available" &&
+                                  isLast
+                                ) {
                                   return (
                                     <AskPlayerQuestionnaire
                                       key={part.toolCallId}
@@ -437,6 +448,8 @@ export function ChatThread({
           onStop={handleStop}
           isPending={isPending}
           disabled={isAwaitingPlayer && !isPending}
+          modelId={modelId}
+          onModelChange={setModelId}
           placeholder={
             isAwaitingPlayer
               ? "Answer the question above to continue..."

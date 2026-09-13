@@ -1,26 +1,15 @@
 "use client"
 
-import {
-  ArrowUpIcon,
-  ChevronDownIcon,
-  GripHorizontalIcon,
-  SquareIcon,
-} from "lucide-react"
+import { ArrowUpIcon, SquareIcon } from "lucide-react"
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { ModelPicker } from "@/components/model-picker"
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
   InputGroupTextarea,
 } from "@/components/ui/input-group"
-
-const models = ["Kimi K3", "Claude Opus 5", "GPT-5", "Gemini 3 Pro"]
+import type { GameModelId } from "@/lib/ai/model-catalog"
 
 type ChatComposerProps = {
   value: string
@@ -32,6 +21,9 @@ type ChatComposerProps = {
   // Blocks typing and sending, e.g. while the chat waits on another answer.
   disabled?: boolean
   placeholder?: string
+  // The model picker shows only when both are given; the caller owns the choice.
+  modelId?: GameModelId
+  onModelChange?: (modelId: GameModelId) => void
 }
 
 export function ChatComposer({
@@ -42,12 +34,14 @@ export function ChatComposer({
   isPending = false,
   disabled = false,
   placeholder = "Describe the game you want to build...",
+  modelId,
+  onModelChange,
 }: ChatComposerProps) {
   const canSubmit = value.trim().length > 0 && !isPending && !disabled
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    
+
     if (!canSubmit) return
 
     onSubmit(value)
@@ -77,18 +71,9 @@ export function ChatComposer({
           className="field-sizing-content max-h-48 min-h-10"
         />
         <InputGroupAddon align="block-end">
-          <DropdownMenu>
-            <DropdownMenuTrigger render={<InputGroupButton />}>
-              <GripHorizontalIcon />
-              Kimi K3
-              <ChevronDownIcon />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-auto">
-              {models.map((model) => (
-                <DropdownMenuItem key={model}>{model}</DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {modelId && onModelChange && (
+            <ModelPicker modelId={modelId} onModelChange={onModelChange} />
+          )}
           {/* Distinct keys so React swaps the element instead of flipping its
               type mid-click, which could submit the form right after a stop. */}
           {isPending && onStop ? (
