@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import Image from "next/image"
+import Link from "next/link"
 import { useChat } from "@ai-sdk/react"
 import * as Sentry from "@sentry/nextjs"
 import { useTriggerChatTransport } from "@trigger.dev/sdk/chat/react"
@@ -59,6 +60,10 @@ type ChatThreadProps = {
 }
 
 type ToolCallState = "active" | "done" | "failed"
+
+// Thrown when the org is out of credits and no chat session starts; the chat
+// shows the out-of-credits notice for it, not an error.
+const OUT_OF_CREDITS_ERROR = "Out of credits"
 
 // The chat's messages don't carry tool types, so ask_player parts are typed
 // from the tool itself.
@@ -240,6 +245,15 @@ export function ChatThread({
   const [input, setInput] = useState("")
   const [modelId, setModelId] = useState(initialModelId)
   const { setBalance } = useCreditBalance()
+  // Set when a request is turned away because the org is out of credits. The
+  // ref is for useChat's callbacks, so they always read the current value.
+  const [isOutOfCredits, setIsOutOfCredits] = useState(false)
+  const isOutOfCreditsRef = useRef(false)
+
+  function showOutOfCredits(value: boolean) {
+    isOutOfCreditsRef.current = value
+    setIsOutOfCredits(value)
+  }
 
   // Set when the agent streams the start of a reply. Reconnecting to a settled
   // chat on load replays the last turn-complete with nothing before it, and
@@ -249,8 +263,17 @@ export function ChatThread({
   const transport = useTriggerChatTransport<typeof gameChat>({
     task: "game-chat",
     accessToken: ({ chatId }) => mintChatAccessToken(chatId),
-    startSession: ({ chatId, clientData }) =>
-      startChatSession({ chatId, clientData }),
+    // An org out of credits gets no session (lib/games/actions.ts).
+    startSession: async ({ chatId, clientData }) => {
+      const session = await startChatSession({ chatId, clientData })
+
+      if ("outOfCredits" in session) {
+        showOutOfCredits(true)
+        throw new Error(OUT_OF_CREDITS_ERROR)
+      }
+
+      return session
+    },
     // Sent with every message, so each reply uses the model picked when it was
     // requested (see trigger/chat.ts).
     clientData: { model: modelId },
@@ -279,18 +302,26 @@ export function ChatThread({
     // Pick up a reply that was still streaming when the page was reloaded.
     resume: initialSession !== undefined,
     // Once the player answers every pending question, continue the reply.
-    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
-    // The agent sends the org's new balance after each step it charges
-    // (trigger/chat.ts).
+    // Not after a turn turned away for credits: the thread still ends in the
+    // answered question, and sending it again would only be turned away again.
+    sendAutomaticallyWhen: (options) =>
+      !isOutOfCreditsRef.current &&
+      lastAssistantMessageIsCompleteWithToolCalls(options),
+    // The agent sends the org's new balance after each step it charges, and
+    // turns a request away when the org is out of credits (trigger/chat.ts).
     onData: (part) => {
       if (part.type === "data-balance" && typeof part.data === "number") {
         setBalance(part.data)
+      } else if (part.type === "data-out-of-credits") {
+        showOutOfCredits(true)
       }
     },
     // The thread only says "Something went wrong". A failed turn is also
     // reported by the agent (trigger/chat.ts); this covers the rest, like a
     // token or connection failure.
     onError: (error) => {
+      if (error.message === OUT_OF_CREDITS_ERROR) return
+
       Sentry.logger.error("Game chat error", {
         "game.id": id,
         "exception.message": error.message,
@@ -319,6 +350,7 @@ export function ChatThread({
   const isAwaitingPlayer = isAwaitingAnswer(messages.at(-1))
 
   function handleSubmit(value: string) {
+    showOutOfCredits(false)
     sendMessage({ text: value })
     setInput("")
   }
@@ -342,6 +374,15 @@ export function ChatThread({
                 // left without a result anywhere else was cut short (e.g. by
                 // stop or a failed turn).
                 const isStreaming = status === "streaming" && isLast
+
+                // A turn turned away for credits writes no reply; don't show
+                // an empty one.
+                if (
+                  message.role === "assistant" &&
+                  message.parts.every((part) => part.type === "step-start")
+                ) {
+                  return null
+                }
 
                 return (
                   <MessageScrollerItem
@@ -437,7 +478,7 @@ export function ChatThread({
                   </MessageScrollerItem>
                 )
               })}
-              {error && (
+              {error && !isOutOfCredits && (
                 <Bubble variant="destructive">
                   <BubbleContent>
                     Something went wrong. Please try again.
@@ -450,6 +491,26 @@ export function ChatThread({
         </MessageScroller>
       </MessageScrollerProvider>
       <div className="mx-auto w-full max-w-3xl px-4 pb-4">
+        {/* Shaped like the composer below it, on the page background. */}
+        {isOutOfCredits && (
+          <div
+            role="status"
+            className="mb-2 rounded-lg border border-input bg-background px-3 py-2.5 text-sm"
+          >
+            <p className="font-medium">Out of credits</p>
+            <p className="text-muted-foreground">
+              Building a game spends credits, and this organization has none
+              left.{" "}
+              <Link
+                href="/billing"
+                className="font-medium text-foreground underline underline-offset-4"
+              >
+                Add more from the billing page
+              </Link>{" "}
+              to pick the game back up.
+            </p>
+          </div>
+        )}
         <ChatComposer
           value={input}
           onValueChange={setInput}

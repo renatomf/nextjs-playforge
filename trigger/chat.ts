@@ -7,6 +7,7 @@ import { gameAgentSettings } from "@/lib/ai/agent"
 import { DEFAULT_GAME_MODEL_ID, GAME_MODEL_IDS } from "@/lib/ai/model-catalog"
 import { chargeStep, getBalance } from "@/lib/credits/ledger"
 import { stepCost } from "@/lib/credits/pricing"
+import { hasCredits } from "@/lib/credits/reconcile"
 import { createGameSandbox } from "@/lib/daytona/utils"
 import {
   getGameMessages,
@@ -147,8 +148,26 @@ export const gameChat = chat.agent({
   tools: ({ chatId }) => createGameTools(chatId),
   run: async ({ chatId, messages, tools, clientData, signal }) => {
     const modelId = clientData?.model ?? DEFAULT_GAME_MODEL_ID
-    // The game's org pays for every step of the reply.
+    // The game's org pays for every step of the reply. The worker has no
+    // auth(), so the org comes from the game row.
     const orgId = await getGameOrgId(chatId)
+
+    // Every turn needs credits, including the one that resumes a reply after
+    // the player answers a question. Only the steps of a reply already
+    // streaming run past zero.
+    if (!(await hasCredits(orgId))) {
+      Sentry.logger.info("Chat turn blocked: out of credits", {
+        "game.id": chatId,
+        "org.id": orgId,
+      })
+      // Transient: the chat shows a notice; nothing is saved to the thread.
+      chat.response.write({
+        type: "data-out-of-credits",
+        data: null,
+        transient: true,
+      })
+      return
+    }
 
     return streamText({
       // Spread first so the options below still win.

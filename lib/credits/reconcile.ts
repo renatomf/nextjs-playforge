@@ -1,10 +1,15 @@
 import "server-only"
 
-import { clerkClient } from "@clerk/nextjs/server"
+import { createClerkClient } from "@clerk/backend"
 
 import { DOLLAR } from "@/lib/credits/format"
+import { getBalance } from "@/lib/credits/ledger"
 import { db } from "@/lib/db"
 import { creditLedger } from "@/lib/db/schema"
+
+// @clerk/backend rather than @clerk/nextjs: the Trigger.dev worker reconciles
+// too, outside Next.js and without auth().
+const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
 
 // Credits added for every month an org has paid for.
 export const MONTHLY_GRANT = 10 * DOLLAR
@@ -41,9 +46,8 @@ function addUTCMonths(date: Date, months: number, day: number) {
 // Grants are keyed by the month they cover, so reconciling again (or a new
 // subscription item in the same month) never grants a month twice.
 export async function reconcileCredits(orgId: string) {
-  const client = await clerkClient()
   const subscription =
-    await client.billing.getOrganizationBillingSubscription(orgId)
+    await clerk.billing.getOrganizationBillingSubscription(orgId)
 
   const months = new Set<string>()
 
@@ -91,4 +95,13 @@ export async function reconcileCredits(orgId: string) {
       }))
     )
     .onConflictDoNothing({ target: [creditLedger.orgId, creditLedger.entryKey] })
+}
+
+// Whether the org can start a build. An empty balance may only mean a paid
+// month renewed since the last sync, so sync the subscription once first.
+export async function hasCredits(orgId: string) {
+  if ((await getBalance(orgId)) > 0) return true
+
+  await reconcileCredits(orgId)
+  return (await getBalance(orgId)) > 0
 }

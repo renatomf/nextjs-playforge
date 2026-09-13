@@ -10,6 +10,7 @@ import { redirect } from "next/navigation"
 
 import { isGameModelId, type GameModelId } from "@/lib/ai/model-catalog"
 import { titleModel } from "@/lib/ai/models"
+import { hasCredits } from "@/lib/credits/reconcile"
 import { db } from "@/lib/db"
 import { games } from "@/lib/db/schema"
 import { getGame } from "@/lib/games/queries"
@@ -19,9 +20,9 @@ const startGameChatSession =
   chat.createStartSessionAction<typeof gameChat>("game-chat")
 
 // The chat id is the game id, and it comes from the browser: only let the
-// caller chat about games in their own org.
+// caller chat about games in their own org. Returns that org.
 async function assertCanChat(gameId: string) {
-  const { userId } = await auth()
+  const { userId, orgId } = await auth()
 
   if (!userId) {
     Sentry.logger.warn("Chat access denied", {
@@ -32,22 +33,33 @@ async function assertCanChat(gameId: string) {
   }
 
   // Also a game in another org: getGame is scoped to the caller's.
-  if (!(await getGame(gameId))) {
+  if (!orgId || !(await getGame(gameId))) {
     Sentry.logger.warn("Chat access denied", {
       "game.id": gameId,
       reason: "not_found",
     })
     throw new Error("Not found")
   }
+
+  return orgId
 }
 
 // Creates the game's chat session and its first run, and returns a
-// session-scoped token. Idempotent per chat id.
+// session-scoped token. Idempotent per chat id. An org out of credits gets no
+// session, so no run or sandbox starts; the chat tells the player why.
 export async function startChatSession({
   chatId,
   clientData,
 }: ChatStartSessionParams<typeof gameChat>) {
-  await assertCanChat(chatId)
+  const orgId = await assertCanChat(chatId)
+
+  if (!(await hasCredits(orgId))) {
+    Sentry.logger.info("Chat session blocked: out of credits", {
+      "game.id": chatId,
+      "org.id": orgId,
+    })
+    return { outOfCredits: true } as const
+  }
 
   return startGameChatSession({ chatId, clientData })
 }
