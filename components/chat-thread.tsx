@@ -18,6 +18,7 @@ import { cn } from "cn"
 import { CheckIcon, XIcon } from "lucide-react"
 
 import { ChatComposer } from "@/components/chat-composer"
+import { useCreditBalance } from "@/components/credit-balance"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker"
 import { Message, MessageAvatar, MessageContent } from "@/components/ui/message"
@@ -238,6 +239,7 @@ export function ChatThread({
 }: ChatThreadProps) {
   const [input, setInput] = useState("")
   const [modelId, setModelId] = useState(initialModelId)
+  const { setBalance } = useCreditBalance()
 
   // Set when the agent streams the start of a reply. Reconnecting to a settled
   // chat on load replays the last turn-complete with nothing before it, and
@@ -278,6 +280,13 @@ export function ChatThread({
     resume: initialSession !== undefined,
     // Once the player answers every pending question, continue the reply.
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+    // The agent sends the org's new balance after each step it charges
+    // (trigger/chat.ts).
+    onData: (part) => {
+      if (part.type === "data-balance" && typeof part.data === "number") {
+        setBalance(part.data)
+      }
+    },
     // The thread only says "Something went wrong". A failed turn is also
     // reported by the agent (trigger/chat.ts); this covers the rest, like a
     // token or connection failure.

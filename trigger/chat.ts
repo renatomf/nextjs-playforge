@@ -4,9 +4,15 @@ import { isToolUIPart, streamText, type UIMessage } from "ai"
 import { z } from "zod"
 
 import { gameAgentSettings } from "@/lib/ai/agent"
-import { GAME_MODEL_IDS } from "@/lib/ai/model-catalog"
+import { DEFAULT_GAME_MODEL_ID, GAME_MODEL_IDS } from "@/lib/ai/model-catalog"
+import { chargeStep, getBalance } from "@/lib/credits/ledger"
+import { stepCost } from "@/lib/credits/pricing"
 import { createGameSandbox } from "@/lib/daytona/utils"
-import { getGameMessages, saveGameMessages } from "@/lib/games/messages"
+import {
+  getGameMessages,
+  getGameOrgId,
+  saveGameMessages,
+} from "@/lib/games/messages"
 import { createGameTools } from "@/lib/games/tools"
 
 // By chat id, how many tool calls the assistant message a turn resumes
@@ -139,12 +145,36 @@ export const gameChat = chat.agent({
   },
   // Resolved each turn, so the file tools are bound to this game's sandbox.
   tools: ({ chatId }) => createGameTools(chatId),
-  run: async ({ messages, tools, clientData, signal }) =>
-    streamText({
+  run: async ({ chatId, messages, tools, clientData, signal }) => {
+    const modelId = clientData?.model ?? DEFAULT_GAME_MODEL_ID
+    // The game's org pays for every step of the reply.
+    const orgId = await getGameOrgId(chatId)
+
+    return streamText({
       // Spread first so the options below still win.
       ...chat.toStreamTextOptions({ tools }),
-      ...gameAgentSettings(clientData?.model),
+      ...gameAgentSettings(modelId),
       messages,
       abortSignal: signal,
-    }),
+      onStepEnd: async (step) => {
+        try {
+          await chargeStep(
+            orgId,
+            step.response.id,
+            stepCost(modelId, step.usage)
+          )
+          // The sidebar shows the new balance as the game builds. Transient:
+          // it isn't saved into the thread.
+          chat.response.write({
+            type: "data-balance",
+            data: await getBalance(orgId),
+            transient: true,
+          })
+        } catch (error) {
+          // A failed charge shouldn't cut the reply short.
+          Sentry.captureException(error, { tags: { chat_id: chatId } })
+        }
+      },
+    })
+  },
 })

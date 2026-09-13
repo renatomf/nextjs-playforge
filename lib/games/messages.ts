@@ -24,6 +24,21 @@ export async function getGameMessages(gameId: string) {
   return game.messages
 }
 
+// The org that owns the game, which pays for its chat's model steps.
+export async function getGameOrgId(gameId: string) {
+  const [game] = await db
+    .select({ orgId: games.orgId })
+    .from(games)
+    .where(eq(games.id, gameId))
+    .limit(1)
+
+  if (!game) {
+    throw new Error("Game not found")
+  }
+
+  return game.orgId
+}
+
 // Overwrites the game's full chat thread. `lastEventId` goes in the same
 // UPDATE so a reload never sees the new thread with the previous turn's cursor.
 export async function saveGameMessages(

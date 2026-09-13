@@ -7,6 +7,7 @@ import { OrganizationSwitcher, UserButton } from "@clerk/nextjs"
 import { CoinsIcon, MessageSquareIcon, SquarePenIcon } from "lucide-react"
 import { cn } from "cn"
 
+import { useCreditBalance } from "@/components/credit-balance"
 import { Empty, EmptyDescription } from "@/components/ui/empty"
 import {
   Popover,
@@ -31,6 +32,7 @@ import {
   SidebarMenuItem,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
+import { formatDollars } from "@/lib/credits/format"
 import type { Game } from "@/lib/db/schema"
 
 function GamesMenu({
@@ -77,6 +79,7 @@ export function AppSidebar({
   games: Pick<Game, "id" | "title">[]
 }) {
   const pathname = usePathname()
+  const { balance } = useCreditBalance()
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -162,7 +165,7 @@ export function AppSidebar({
               <CoinsIcon />
               <span>Credits</span>
             </SidebarMenuButton>
-            <SidebarMenuBadge>$1.00</SidebarMenuBadge>
+            <SidebarMenuBadge>{formatDollars(balance)}</SidebarMenuBadge>
           </SidebarMenuItem>
         </SidebarMenu>
         <div className="flex items-center justify-between px-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
