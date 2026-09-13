@@ -1,3 +1,5 @@
+import * as Sentry from "@sentry/nextjs"
+
 import { GAME_PORT, startGameServer } from "@/lib/daytona/utils"
 import { getGame } from "@/lib/games/queries"
 
@@ -11,9 +13,16 @@ export async function GET(
   ctx: RouteContext<"/api/games/[id]/preview">
 ) {
   const { id } = await ctx.params
+  // Also tags the sandbox and game server logs startGameServer writes.
+  Sentry.getIsolationScope().setAttributes({ "game.id": id })
   const game = await getGame(id)
 
   if (!game?.sandboxId) {
+    // The page only asks for a preview once the game has a sandbox, so this
+    // is a game outside the caller's org, or one whose sandbox never got made.
+    Sentry.logger.warn("Game preview unavailable", {
+      reason: game ? "no_sandbox" : "not_found",
+    })
     return Response.json({ error: "Not found" }, { status: 404 })
   }
 

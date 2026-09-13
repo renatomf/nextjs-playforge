@@ -1,6 +1,9 @@
 import "server-only"
 
 import { DaytonaNotFoundError, type Sandbox } from "@daytona/sdk"
+// Not @sentry/nextjs: this also runs in the Trigger.dev chat agent. In the
+// Next.js server, the Next.js SDK is built on @sentry/node and shares its client.
+import * as Sentry from "@sentry/node"
 import { eq } from "drizzle-orm"
 
 import { daytona } from "@/lib/daytona/client"
@@ -14,14 +17,22 @@ export const GAME_PORT = 8080
 // Creates the game's sandbox, seeds its files from lib/games/runtime, and
 // saves the sandbox id on the game row.
 export async function createGameSandbox(gameId: string) {
+  const startedAt = Date.now()
   const sandbox = await daytona.create({ labels: { gameId } })
 
-  await seedGameDir(sandbox, GAME_DIR)
+  const { files } = await seedGameDir(sandbox, GAME_DIR)
 
   await db
     .update(games)
     .set({ sandboxId: sandbox.id })
     .where(eq(games.id, gameId))
+
+  Sentry.logger.info("Game sandbox created", {
+    "game.id": gameId,
+    "sandbox.id": sandbox.id,
+    "sandbox.seed_files": files,
+    duration_ms: Date.now() - startedAt,
+  })
 
   return { sandbox }
 }
@@ -29,12 +40,24 @@ export async function createGameSandbox(gameId: string) {
 // Idle sandboxes auto-stop, so wake the game's sandbox before using it.
 async function getStartedSandbox(sandboxId: string) {
   const sandbox = await daytona.get(sandboxId)
+  const { state } = sandbox
 
-  if (sandbox.state === "starting") {
+  if (state === "started") return { sandbox }
+
+  const startedAt = Date.now()
+
+  if (state === "starting") {
     await sandbox.waitUntilStarted()
-  } else if (sandbox.state !== "started") {
+  } else {
     await sandbox.start()
   }
+
+  // The slow path behind a slow preview or first tool call.
+  Sentry.logger.info("Game sandbox woken", {
+    "sandbox.id": sandboxId,
+    "sandbox.previous_state": state ?? "unknown",
+    duration_ms: Date.now() - startedAt,
+  })
 
   return { sandbox }
 }
@@ -59,6 +82,12 @@ export async function getGameSandbox(gameId: string) {
       return await getStartedSandbox(game.sandboxId)
     } catch (error) {
       if (!(error instanceof DaytonaNotFoundError)) throw error
+
+      // The player loses every file the agent wrote for this game.
+      Sentry.logger.warn("Game sandbox missing, creating a new one", {
+        "game.id": gameId,
+        "sandbox.id": game.sandboxId,
+      })
     }
   }
 
@@ -81,6 +110,8 @@ export async function startGameServer(sandboxId: string) {
 
   if (await isGameServerUp(sandbox)) return { sandbox }
 
+  const startedAt = Date.now()
+
   // Backgrounded so the command returns right away. If two requests race to
   // get here, the second server can't bind the port and exits.
   await sandbox.process.executeCommand(
@@ -88,9 +119,23 @@ export async function startGameServer(sandboxId: string) {
   )
 
   for (let attempt = 0; attempt < 20; attempt++) {
-    if (await isGameServerUp(sandbox)) return { sandbox }
+    if (await isGameServerUp(sandbox)) {
+      Sentry.logger.info("Game server started", {
+        "sandbox.id": sandboxId,
+        "game_server.checks": attempt + 1,
+        duration_ms: Date.now() - startedAt,
+      })
+
+      return { sandbox }
+    }
     await new Promise((resolve) => setTimeout(resolve, 250))
   }
+
+  // The thrown error has no sandbox id; this log does.
+  Sentry.logger.error("Game server did not start", {
+    "sandbox.id": sandboxId,
+    duration_ms: Date.now() - startedAt,
+  })
 
   throw new Error("Game server did not start")
 }

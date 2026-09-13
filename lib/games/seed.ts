@@ -20,7 +20,7 @@ function toSandboxPath(entry: Dirent, gameDir: string) {
 }
 
 // Copies every folder and file in RUNTIME_DIR into the sandbox's gameDir,
-// keeping their layout.
+// keeping their layout. Returns how many files it copied.
 export async function seedGameDir(sandbox: Sandbox, gameDir: string) {
   const entries = await readdir(RUNTIME_DIR, {
     recursive: true,
@@ -48,4 +48,6 @@ export async function seedGameDir(sandbox: Sandbox, gameDir: string) {
   )
 
   await sandbox.fs.uploadFiles(files)
+
+  return { files: files.length }
 }

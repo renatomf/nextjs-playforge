@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import Image from "next/image"
 import { useChat } from "@ai-sdk/react"
+import * as Sentry from "@sentry/nextjs"
 import { useTriggerChatTransport } from "@trigger.dev/sdk/chat/react"
 import {
   getToolName,
@@ -269,6 +270,15 @@ export function ChatThread({
     resume: initialSession !== undefined,
     // Once the player answers every pending question, continue the reply.
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+    // The thread only says "Something went wrong". A failed turn is also
+    // reported by the agent (trigger/chat.ts); this covers the rest, like a
+    // token or connection failure.
+    onError: (error) => {
+      Sentry.logger.error("Game chat error", {
+        "game.id": id,
+        "exception.message": error.message,
+      })
+    },
   })
 
   // A thread ending in a user message has no reply yet (e.g. the prompt saved

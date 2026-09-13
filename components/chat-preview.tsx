@@ -45,8 +45,18 @@ export function ChatPreview({ gameId, revision }: ChatPreviewProps) {
       if (!ignore) setPreview({ status: "ready", url, revision })
     }
 
-    loadPreview().catch(() => {
-      if (!ignore) setPreview({ status: "error" })
+    loadPreview().catch((error: unknown) => {
+      if (ignore) return
+
+      setPreview({ status: "error" })
+      // The route's own crashes reach Sentry as errors; this also catches a
+      // 404 or a dropped connection, which leave the player without a preview.
+      Sentry.logger.error("Game preview failed to load", {
+        "game.id": gameId,
+        "game.revision": revision,
+        "exception.message":
+          error instanceof Error ? error.message : String(error),
+      })
     })
 
     return () => {

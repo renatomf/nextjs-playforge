@@ -3,6 +3,8 @@
 // rewrite would also pass along the browser's cookies, which include the Clerk
 // session and which Sentry's ingest rejects once they grow large.
 
+import * as Sentry from "@sentry/nextjs"
+
 // The client's DSN; envelopes for any other project are refused, so the route
 // can't relay to someone else's Sentry.
 const dsn = new URL(
@@ -29,6 +31,9 @@ export async function POST(request: Request) {
     )
     envelopeDsn = new URL(header.dsn)
   } catch {
+    Sentry.logger.warn("Sentry tunnel rejected an envelope", {
+      reason: "invalid_envelope",
+    })
     return new Response("Invalid envelope", { status: 400 })
   }
 
@@ -36,6 +41,11 @@ export async function POST(request: Request) {
     envelopeDsn.hostname !== dsn.hostname ||
     envelopeDsn.pathname.slice(1) !== projectId
   ) {
+    Sentry.logger.warn("Sentry tunnel rejected an envelope", {
+      reason: "unknown_dsn",
+      // Not server.address: the SDK sets that to this server's hostname.
+      "tunnel.dsn_host": envelopeDsn.hostname,
+    })
     return new Response("Unknown DSN", { status: 400 })
   }
 
@@ -47,6 +57,14 @@ export async function POST(request: Request) {
       body: envelope,
     }
   )
+
+  // The browser's events are lost. A 429 is Sentry rate-limiting the browser
+  // SDK, which backs off by itself.
+  if (!response.ok && response.status !== 429) {
+    Sentry.logger.error("Sentry tunnel forward failed", {
+      "http.response.status_code": response.status,
+    })
+  }
 
   const headers = new Headers()
   for (const name of FORWARDED_HEADERS) {

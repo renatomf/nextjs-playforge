@@ -18,6 +18,18 @@ Sentry.init({
   environment:
     process.env.NEXT_PUBLIC_SENTRY_ENVIRONMENT ??
     (process.env.NODE_ENV === "production" ? "production" : "development"),
+  // Sends Sentry.logger.* calls from tasks and the lib/ code they share.
+  enableLogs: true,
+})
+
+// Tags every log a run writes with the run, including the logs of the lib/
+// code it calls. A worker process runs one run at a time, so the global scope
+// belongs to this run.
+tasks.onStartAttempt(({ ctx }) => {
+  Sentry.getGlobalScope().setAttributes({
+    "trigger.task": ctx.task.id,
+    "trigger.run": ctx.run.id,
+  })
 })
 
 // Fires once a run has used up its retries. A failed chat turn doesn't fail

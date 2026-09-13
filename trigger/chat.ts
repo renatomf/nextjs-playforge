@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/node"
 import { chat, upsertIncomingMessage } from "@trigger.dev/sdk/ai"
-import { isStepCount, streamText, type UIMessage } from "ai"
+import { isStepCount, isToolUIPart, streamText, type UIMessage } from "ai"
 
 import { chatModel } from "@/lib/ai/models"
 import { createGameSandbox } from "@/lib/daytona/utils"
@@ -11,6 +11,10 @@ import { createGameTools } from "@/lib/games/tools"
 // Most model steps one turn may take. Each step can call several tools, so
 // this leaves room to read, write, and fix a whole game in one reply.
 const MAX_STEPS = 30
+
+// By chat id, how many tool calls the assistant message a turn resumes
+// already has: set in hydrateMessages, read by onTurnComplete.
+const toolCallsBeforeTurn = new Map<string, number>()
 
 // A turn that fails before the model writes anything (e.g. the provider is
 // overloaded) still produces an assistant message, with no content. Drop it so
@@ -47,6 +51,13 @@ export const gameChat = chat.agent({
       last?.role === "assistant" &&
       incomingMessages.some((message) => message.id === last.id)
 
+    // A resumed message still holds the earlier turns' tool calls (the
+    // answered questions); the turn summary counts only the ones after them.
+    toolCallsBeforeTurn.set(
+      chatId,
+      isResume ? last.parts.filter(isToolUIPart).length : 0
+    )
+
     if (last?.role !== "user" && !isResume) {
       throw new Error("Nothing to reply to")
     }
@@ -57,7 +68,18 @@ export const gameChat = chat.agent({
   onChatStart: async ({ chatId }) => {
     await createGameSandbox(chatId)
   },
-  onTurnComplete: async ({ chatId, uiMessages, lastEventId, error }) => {
+  onTurnComplete: async ({
+    chatId,
+    runId,
+    turn,
+    uiMessages,
+    responseMessage,
+    lastEventId,
+    stopped,
+    finishReason,
+    usage,
+    error,
+  }) => {
     // A failed turn ends with an error chunk but doesn't fail the run, so the
     // global onFailure hook (trigger/init.ts) never sees it: report it here.
     if (error) {
@@ -67,9 +89,41 @@ export const gameChat = chat.agent({
     // Always save the cursor, even for a failed turn, so a reload resumes past it.
     await saveGameMessages(chatId, withoutEmptyReplies(uiMessages), lastEventId)
 
-    if (error) {
-      await Sentry.flush(2000)
-    }
+    // One summary per turn. Each failed tool call is also logged on its own
+    // (lib/games/tools.ts); a pending one is an ask_player question.
+    const toolParts = (responseMessage?.parts.filter(isToolUIPart) ?? []).slice(
+      toolCallsBeforeTurn.get(chatId) ?? 0
+    )
+    toolCallsBeforeTurn.delete(chatId)
+    Sentry.logger[error ? "error" : "info"](
+      error ? "Chat turn failed" : "Chat turn completed",
+      {
+        "game.id": chatId,
+        "trigger.run": runId,
+        "chat.turn": turn,
+        "chat.stopped": stopped,
+        "chat.tool_calls": toolParts.length,
+        "chat.tool_errors": toolParts.filter(
+          (part) => part.state === "output-error"
+        ).length,
+        "chat.awaiting_player": toolParts.some(
+          (part) => part.state === "input-available"
+        ),
+        "gen_ai.request.model": chatModel.modelId,
+        "gen_ai.response.finish_reasons": finishReason ?? "unknown",
+        // Left out when unknown: an undefined attribute is sent as "".
+        ...(usage?.inputTokens !== undefined && {
+          "gen_ai.usage.input_tokens": usage.inputTokens,
+        }),
+        ...(usage?.outputTokens !== undefined && {
+          "gen_ai.usage.output_tokens": usage.outputTokens,
+        }),
+      }
+    )
+
+    // Send the turn's logs (and error) before the run suspends to wait for
+    // the next message.
+    await Sentry.flush(2000)
   },
   uiMessageStreamOptions: {
     // Don't send raw error details (keys, stack traces) to the browser; they

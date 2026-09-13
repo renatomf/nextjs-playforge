@@ -1,6 +1,7 @@
 "use server"
 
 import { auth } from "@clerk/nextjs/server"
+import * as Sentry from "@sentry/nextjs"
 import { auth as triggerAuth } from "@trigger.dev/sdk"
 import { chat, type ChatStartSessionParams } from "@trigger.dev/sdk/ai"
 import { generateId, generateText } from "ai"
@@ -22,10 +23,19 @@ async function assertCanChat(gameId: string) {
   const { userId } = await auth()
 
   if (!userId) {
+    Sentry.logger.warn("Chat access denied", {
+      "game.id": gameId,
+      reason: "unauthenticated",
+    })
     throw new Error("Unauthorized")
   }
 
+  // Also a game in another org: getGame is scoped to the caller's.
   if (!(await getGame(gameId))) {
+    Sentry.logger.warn("Chat access denied", {
+      "game.id": gameId,
+      reason: "not_found",
+    })
     throw new Error("Not found")
   }
 }
@@ -55,11 +65,13 @@ export async function mintChatAccessToken(chatId: string) {
 }
 
 export async function createGame(input: string) {
-  const { orgId } = await auth()
+  const { userId, orgId } = await auth()
 
-  if (!orgId) {
+  if (!userId || !orgId) {
     throw new Error("Unauthorized: no active organization")
   }
+
+  Sentry.setUser({ id: userId })
 
   const prompt = typeof input === "string" ? input.trim() : ""
 
@@ -67,6 +79,7 @@ export async function createGame(input: string) {
     return
   }
 
+  const titleStartedAt = Date.now()
   const { text } = await generateText({
     model: titleModel,
     instructions:
@@ -75,6 +88,7 @@ export async function createGame(input: string) {
     prompt,
     maxOutputTokens: 32,
   })
+  const titleDurationMs = Date.now() - titleStartedAt
 
   // Fall back to the raw prompt if the model returns nothing.
   const title = text.trim() || prompt
@@ -95,6 +109,16 @@ export async function createGame(input: string) {
       ],
     })
     .returning({ id: games.id })
+
+  // The title call is what the player waits on before the game page opens.
+  Sentry.logger.info("Game created", {
+    "game.id": game.id,
+    "org.id": orgId,
+    "game.prompt_length": prompt.length,
+    "game.title_from_prompt": !text.trim(),
+    "gen_ai.request.model": titleModel.modelId,
+    "game.title_duration_ms": titleDurationMs,
+  })
 
   // Re-render the (app) layout so the sidebar picks up the new game.
   refresh()

@@ -3,6 +3,8 @@ import "server-only"
 import path from "node:path"
 
 import type { Sandbox } from "@daytona/sdk"
+// Not @sentry/nextjs: these tools run in the Trigger.dev chat agent.
+import * as Sentry from "@sentry/node"
 import { tool } from "ai"
 import { z } from "zod"
 
@@ -69,6 +71,28 @@ export function createGameTools(gameId: string) {
     }
   }
 
+  // A failed tool call goes back to the model, which usually works around it,
+  // so it never reaches Sentry as an error. Logged to explain a turn that went
+  // wrong: a path outside the game, a stale snippet, or the sandbox failing.
+  async function runTool<T>(
+    name: string,
+    filePath: string,
+    execute: () => Promise<T>
+  ) {
+    try {
+      return await execute()
+    } catch (error) {
+      Sentry.logger.warn("Game tool failed", {
+        "game.id": gameId,
+        "gen_ai.tool.name": name,
+        "game.path": filePath,
+        "exception.message":
+          error instanceof Error ? error.message : String(error),
+      })
+      throw error
+    }
+  }
+
   return {
     write_file: tool({
       description:
@@ -77,14 +101,15 @@ export function createGameTools(gameId: string) {
         path: pathSchema,
         content: z.string().describe("The complete new content of the file."),
       }),
-      execute: async ({ path: filePath, content }) => {
-        const resolved = resolveGameFile(filePath)
-        const sandbox = await getSandbox()
+      execute: ({ path: filePath, content }) =>
+        runTool("write_file", filePath, async () => {
+          const resolved = resolveGameFile(filePath)
+          const sandbox = await getSandbox()
 
-        await sandbox.fs.uploadFile(Buffer.from(content), resolved)
+          await sandbox.fs.uploadFile(Buffer.from(content), resolved)
 
-        return { path: toGamePath(resolved), written: true }
-      },
+          return { path: toGamePath(resolved), written: true }
+        }),
     }),
 
     replace_text: tool({
@@ -106,49 +131,53 @@ export function createGameTools(gameId: string) {
             "Replace every occurrence instead of requiring exactly one. Defaults to false."
           ),
       }),
-      execute: async ({ path: filePath, oldText, newText, replaceAll }) => {
-        const resolved = resolveGameFile(filePath)
-        const sandbox = await getSandbox()
+      execute: ({ path: filePath, oldText, newText, replaceAll }) =>
+        runTool("replace_text", filePath, async () => {
+          const resolved = resolveGameFile(filePath)
+          const sandbox = await getSandbox()
 
-        const text = (await sandbox.fs.downloadFile(resolved)).toString("utf8")
-        const occurrences = countOccurrences(text, oldText)
-
-        if (occurrences === 0) {
-          throw new Error(
-            `oldText was not found in "${filePath}". Read the file and copy the snippet exactly.`
+          const text = (await sandbox.fs.downloadFile(resolved)).toString(
+            "utf8"
           )
-        }
+          const occurrences = countOccurrences(text, oldText)
 
-        if (occurrences > 1 && !replaceAll) {
-          throw new Error(
-            `oldText appears ${occurrences} times in "${filePath}". Include more surrounding text to make it unique, or set replaceAll to true.`
-          )
-        }
+          if (occurrences === 0) {
+            throw new Error(
+              `oldText was not found in "${filePath}". Read the file and copy the snippet exactly.`
+            )
+          }
 
-        // Split and join rather than String.replace, which would treat `$` in
-        // newText as a replacement pattern.
-        const updated = text.split(oldText).join(newText)
+          if (occurrences > 1 && !replaceAll) {
+            throw new Error(
+              `oldText appears ${occurrences} times in "${filePath}". Include more surrounding text to make it unique, or set replaceAll to true.`
+            )
+          }
 
-        await sandbox.fs.uploadFile(Buffer.from(updated), resolved)
+          // Split and join rather than String.replace, which would treat `$`
+          // in newText as a replacement pattern.
+          const updated = text.split(oldText).join(newText)
 
-        return { path: toGamePath(resolved), replacements: occurrences }
-      },
+          await sandbox.fs.uploadFile(Buffer.from(updated), resolved)
+
+          return { path: toGamePath(resolved), replacements: occurrences }
+        }),
     }),
 
     read_file: tool({
       description:
         "Read the full content of a file in the game directory. Use it before editing a file.",
       inputSchema: z.object({ path: pathSchema }),
-      execute: async ({ path: filePath }) => {
-        const resolved = resolveGameFile(filePath)
-        const sandbox = await getSandbox()
+      execute: ({ path: filePath }) =>
+        runTool("read_file", filePath, async () => {
+          const resolved = resolveGameFile(filePath)
+          const sandbox = await getSandbox()
 
-        const content = (await sandbox.fs.downloadFile(resolved)).toString(
-          "utf8"
-        )
+          const content = (await sandbox.fs.downloadFile(resolved)).toString(
+            "utf8"
+          )
 
-        return { path: toGamePath(resolved), content }
-      },
+          return { path: toGamePath(resolved), content }
+        }),
     }),
 
     list_files: tool({
@@ -161,41 +190,43 @@ export function createGameTools(gameId: string) {
             "Folder to list, relative to the game directory. Defaults to the whole game directory."
           ),
       }),
-      execute: async ({ path: dirPath = "." }) => {
-        const resolved = resolveGamePath(dirPath)
-        const sandbox = await getSandbox()
+      execute: ({ path: dirPath = "." }) =>
+        runTool("list_files", dirPath, async () => {
+          const resolved = resolveGamePath(dirPath)
+          const sandbox = await getSandbox()
 
-        const entries = await sandbox.fs.listFiles(resolved, {
-          depth: LIST_DEPTH,
-        })
+          const entries = await sandbox.fs.listFiles(resolved, {
+            depth: LIST_DEPTH,
+          })
 
-        return {
-          path: toGamePath(resolved),
-          entries: entries
-            .map((entry) => ({
-              path: toGamePath(
-                entry.path ?? path.posix.join(resolved, entry.name)
-              ),
-              type: entry.isDir ? "directory" : "file",
-              size: entry.size,
-            }))
-            .sort((a, b) => a.path.localeCompare(b.path)),
-        }
-      },
+          return {
+            path: toGamePath(resolved),
+            entries: entries
+              .map((entry) => ({
+                path: toGamePath(
+                  entry.path ?? path.posix.join(resolved, entry.name)
+                ),
+                type: entry.isDir ? "directory" : "file",
+                size: entry.size,
+              }))
+              .sort((a, b) => a.path.localeCompare(b.path)),
+          }
+        }),
     }),
 
     delete_file: tool({
       description:
         "Delete a file, or a folder and everything in it, from the game directory.",
       inputSchema: z.object({ path: pathSchema }),
-      execute: async ({ path: filePath }) => {
-        const resolved = resolveGameFile(filePath)
-        const sandbox = await getSandbox()
+      execute: ({ path: filePath }) =>
+        runTool("delete_file", filePath, async () => {
+          const resolved = resolveGameFile(filePath)
+          const sandbox = await getSandbox()
 
-        await sandbox.fs.deleteFile(resolved, true)
+          await sandbox.fs.deleteFile(resolved, true)
 
-        return { path: toGamePath(resolved), deleted: true }
-      },
+          return { path: toGamePath(resolved), deleted: true }
+        }),
     }),
 
     ask_player: askPlayer,
