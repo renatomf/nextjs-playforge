@@ -15,8 +15,8 @@ export default withSentryConfig(nextConfig, {
   // Upload a wider set of client source files for better stack trace resolution
   widenClientFileUpload: true,
 
-  // Proxy Sentry requests through the app to get around ad-blockers
-  tunnelRoute: "/monitoring",
+  // No tunnelRoute: its rewrite forwards the browser's cookies to Sentry, which
+  // rejects them once they grow large. app/monitoring/route.ts is the tunnel.
 
   // Only print source map upload logs in CI
   silent: !process.env.CI,

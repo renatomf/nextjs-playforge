@@ -18,6 +18,10 @@ Sentry.init({
   // 100% in dev, 10% in production
   tracesSampleRate: process.env.NODE_ENV === "development" ? 1.0 : 0.1,
 
+  // The browser SDK's tunnel (app/monitoring/route.ts); tracing it would add a
+  // transaction for every event the browser sends.
+  ignoreTransactions: ["POST /monitoring"],
+
   // Attach local variable values to stack frames
   includeLocalVariables: true,
 

@@ -8,6 +8,9 @@ Sentry.init({
   // Set per deploy (e.g. "production" on Railway); unset, the SDK picks one
   environment: process.env.NEXT_PUBLIC_SENTRY_ENVIRONMENT,
 
+  // Sends events through the app (app/monitoring/route.ts) to get around ad-blockers
+  tunnel: "/monitoring",
+
   dataCollection: {
     // To disable sending user data and HTTP bodies, uncomment the lines below. For more info visit:
     // https://docs.sentry.io/platforms/javascript/guides/nextjs/configuration/options/#dataCollection

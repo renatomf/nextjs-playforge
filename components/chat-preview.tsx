@@ -1,8 +1,15 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import * as Sentry from "@sentry/nextjs"
+import { useEffect, useRef, useState } from "react"
 
 import { Spinner } from "@/components/ui/spinner"
+
+// How often the game is asked for its first error; lib/games/runtime/report.js
+// answers each game-ping with a game-status.
+const PING_INTERVAL_MS = 2000
+
+type GameStatus = { type: "game-status"; error: string | null }
 
 type Preview =
   | { status: "loading" }
@@ -17,6 +24,7 @@ type ChatPreviewProps = {
 
 export function ChatPreview({ gameId, revision }: ChatPreviewProps) {
   const [preview, setPreview] = useState<Preview>({ status: "loading" })
+  const frameRef = useRef<HTMLIFrameElement>(null)
 
   useEffect(() => {
     // Strict Mode runs this effect twice; only the live one may set state.
@@ -46,9 +54,51 @@ export function ChatPreview({ gameId, revision }: ChatPreviewProps) {
     }
   }, [gameId, revision])
 
+  // Polls the game for errors and logs the first one to Sentry. The game keeps
+  // answering with that same error, so polling stops once it has one; a new
+  // revision remounts the iframe and starts over.
+  useEffect(() => {
+    const frame = frameRef.current
+    if (preview.status !== "ready" || !frame) return
+
+    // The signed url carries its token in the host, so the origin is also
+    // stripped from the error's stack before it's logged.
+    const origin = new URL(preview.url).origin
+
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== frame.contentWindow || event.origin !== origin) return
+
+      const data = event.data as Partial<GameStatus> | null
+      if (data?.type !== "game-status" || typeof data.error !== "string") return
+
+      stop()
+      const error = data.error.replaceAll(origin, "")
+      Sentry.logger.error("Game preview error", {
+        "game.id": gameId,
+        "game.revision": preview.revision,
+        "exception.message": error.split("\n")[0],
+        "exception.stacktrace": error,
+      })
+    }
+
+    const ping = () =>
+      frame.contentWindow?.postMessage({ type: "game-ping" }, origin)
+
+    window.addEventListener("message", onMessage)
+    const timer = window.setInterval(ping, PING_INTERVAL_MS)
+
+    const stop = () => {
+      window.clearInterval(timer)
+      window.removeEventListener("message", onMessage)
+    }
+
+    return stop
+  }, [gameId, preview])
+
   if (preview.status === "ready") {
     return (
       <iframe
+        ref={frameRef}
         // Daytona can hand back the same url after an update, and an unchanged
         // src doesn't reload the iframe, so a new revision remounts it.
         key={preview.revision}
