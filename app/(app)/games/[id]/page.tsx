@@ -31,7 +31,7 @@ export default async function Page(props: PageProps<"/games/[id]">) {
 
   return (
     <div className="flex h-svh flex-col">
-      <GameHeader gameId={game.id} title={game.title} />
+      <GameHeader title={game.title} />
       <GameChat
         id={game.id}
         initialMessages={game.messages}
