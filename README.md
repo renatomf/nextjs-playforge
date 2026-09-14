@@ -16,6 +16,10 @@ dentro de um sandbox isolado na nuvem e entrega um jogo jogável ao lado do chat
 [![Clerk](https://img.shields.io/badge/Clerk-Auth_%2B_Billing-6C47FF?style=flat-square)](https://clerk.com)
 [![Sentry](https://img.shields.io/badge/Sentry-Observabilidade-362D59?style=flat-square)](https://sentry.io)
 
+<br/>
+
+![Sandbox: o agente fazendo perguntas de múltipla escolha no chat, com o preview do jogo ao lado](docs/screenshot.png)
+
 </div>
 
 Aqui, fazer um jogo é conversar. Você descreve o que quer — um racer, um shooter, um puzzle, um
