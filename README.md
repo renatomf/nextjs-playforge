@@ -815,36 +815,3 @@ engine and the prompt were written for r186.
 **The system prompt is split by topic.** There are four system messages — workflow, runtime, engine
 and design — each in its own file, in the order the agent needs them.
 
-### What's deliberately not here
-
-- **No migrations.** The schema is synced with `db:push` while the project has no compatibility
-  commitments.
-- **No custom API for the chat.** The browser talks to Trigger.dev realtime with a scoped token.
-  Next.js only opens sessions and issues tokens — it doesn't relay any stream.
-- **No global state manager.** The thread belongs to `useChat`, the balance lives in a small context
-  fed by the stream itself, and the rest comes from the server.
-- **No game files in the database.** The sandbox is the source of truth for the files; the database
-  stores only the conversation and the sandbox id.
-
----
-
-## ⚠️ Known limitations
-
-- **Daytona's preview warning.** In Tier 1 and Tier 2 organizations, Daytona's proxy shows a warning
-  screen on the first visit to each preview URL. The app shows it so you can click through, and hides
-  the "Redirecting…" page that follows. The warning goes away on Tier 3, or with your own preview
-  proxy that sends the `X-Daytona-Skip-Preview-Warning: true` header.
-- **Deleting the sandbox deletes the game.** The files only exist in the sandbox; there's no volume
-  and no copy in the database. A lost sandbox comes back as the welcome page.
-- **Qwen3 8B only works in dev.** The Ollama provider points to `localhost`, which is only your
-  machine when the worker runs with `trigger:dev`.
-- **Prices are hardcoded.** The table in `pricing.ts` holds the list prices checked on 2026-09-13 and
-  needs manual updates — Gemini, for example, doubles in price on 2027-01-01.
-- **Configuration tied to the original project.** The `project` in `trigger.config.ts`, the Sentry
-  DSN fallbacks and the `ammodev`/`sandbox` Sentry organization and project defaults point to the
-  author's environment.
-- **No automated tests.** Verification today is `typecheck`, `lint` and Sentry.
-- **Clerk is running on development keys**, limited to ~100 users and using Clerk's own demo OAuth
-  apps. Production requires a production instance and your own domain.
-- **`AI_PROVIDER`** may show up in old `.env.local` files, but no code reads it — the model is chosen
-  per message.
