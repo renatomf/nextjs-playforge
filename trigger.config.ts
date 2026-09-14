@@ -29,6 +29,10 @@ export default defineConfig({
     // Tasks share lib/ with the Next.js server, whose modules import
     // "server-only"; this condition resolves it to its no-op build.
     conditions: ["react-server"],
+    // The Daytona SDK loads form-data (upload) and busboy (download) through
+    // its own require alias, which esbuild can't see, so a bundled SDK can't
+    // find them once deployed. Left external, it's installed with its deps.
+    external: ["@daytona/sdk"],
     extensions: [
       // Seed files for new game sandboxes. They're read with fs, never
       // imported, so the bundle would leave them out otherwise.
