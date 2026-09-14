@@ -2,10 +2,10 @@
 
 # Playforge
 
-**Descreva um jogo. Veja ele ser construído. Jogue na hora.**
+**Describe a game. Watch it get built. Play it right away.**
 
-Construtor agêntico de jogos 3D: um agente de IA planeja a cena, escreve o código em Three.js
-dentro de um sandbox isolado na nuvem e entrega um jogo jogável ao lado do chat.
+Agentic 3D game builder: an AI agent plans the scene, writes the Three.js code inside an isolated
+cloud sandbox, and delivers a playable game right next to the chat.
 
 [![Next.js](https://img.shields.io/badge/Next.js-16-000000?style=flat-square)](https://nextjs.org)
 [![AI SDK](https://img.shields.io/badge/AI_SDK-v7-111111?style=flat-square)](https://ai-sdk.dev)
@@ -14,584 +14,586 @@ dentro de um sandbox isolado na nuvem e entrega um jogo jogável ao lado do chat
 [![Three.js](https://img.shields.io/badge/Three.js-r186-049EF4?style=flat-square)](https://threejs.org)
 [![Neon](https://img.shields.io/badge/Neon-Postgres-00E5A0?style=flat-square)](https://neon.com)
 [![Clerk](https://img.shields.io/badge/Clerk-Auth_%2B_Billing-6C47FF?style=flat-square)](https://clerk.com)
-[![Sentry](https://img.shields.io/badge/Sentry-Observabilidade-362D59?style=flat-square)](https://sentry.io)
+[![Sentry](https://img.shields.io/badge/Sentry-Observability-362D59?style=flat-square)](https://sentry.io)
 
 <br/>
 
-![Sandbox: o agente fazendo perguntas de múltipla escolha no chat, com o preview do jogo ao lado](docs/screenshot.png)
+![Playforge: the agent asking multiple-choice questions in the chat, with the game preview beside it](docs/screenshot.png)
 
 </div>
 
-Aqui, fazer um jogo é conversar. Você descreve o que quer — um racer, um shooter, um puzzle, um
-mundo inteiro — e um agente assume: faz as perguntas que a descrição deixou em aberto, escreve os
-arquivos do jogo num computador isolado na nuvem e, a cada resposta, o preview ao lado recarrega com
-a versão nova. Pediu uma mudança? É só mandar outra mensagem no mesmo chat.
+Here, making a game is a conversation. You describe what you want — a racer, a shooter, a puzzle, a
+whole world — and an agent takes over: it asks the questions your description left open, writes the
+game's files on an isolated computer in the cloud and, after every reply, the preview next to the
+chat reloads with the new version. Want a change? Just send another message in the same chat.
 
-Cada organização tem os próprios jogos, os próprios créditos e um plano de assinatura. Cada passo do
-modelo é cobrado ao centavo — na verdade, ao bilionésimo de dólar.
+Each organization has its own games, its own credits and a subscription plan. Every model step is
+billed to the cent — actually, to the billionth of a dollar.
 
-**Atalhos** · [O que faz](#-o-que-faz) · [Stack](#️-stack-completa) · [Modelos](#-os-modelos) ·
-[Como funciona](#️-como-funciona) · [Arquitetura](#️-arquitetura) · [Estrutura](#-estrutura-do-projeto) ·
-[**Como rodar**](#-como-rodar-localmente) · [Chaves de API](#-onde-pegar-cada-chave) ·
-[Deploy](#-deploy) · [Decisões de engenharia](#-decisões-de-engenharia)
+**Shortcuts** · [What it does](#-what-it-does) · [Stack](#️-full-stack) · [Models](#-the-models) ·
+[How it works](#️-how-it-works) · [Architecture](#️-architecture) · [Structure](#-project-structure) ·
+[**Running locally**](#-running-locally) · [API keys](#-where-to-get-each-key) ·
+[Engineering decisions](#-engineering-decisions) · [Limitations](#️-known-limitations)
 
 ---
 
-## ✨ O que faz
+## ✨ What it does
 
 | | |
 | --- | --- |
-| **Jogo a partir de texto** | Um prompt vira um jogo 3D jogável. O agente escreve HTML, CSS e JavaScript sobre uma engine própria montada em cima do Three.js. |
-| **Um computador por jogo** | Cada jogo ganha o próprio sandbox no Daytona: sistema de arquivos, processo e porta próprios. O código gerado nunca roda no servidor do app. |
-| **Perguntas antes de construir** | Com a ferramenta `ask_player`, o agente pergunta — em múltipla escolha — o que a descrição deixou em aberto: loop, objetivo, controles, mundo, visual, sensação, som e desafio. |
-| **Agente durável** | O chat roda como `chat.agent` do Trigger.dev, solto do request HTTP. Fechar a aba não derruba a resposta; recarregar a página retoma o stream de onde parou. |
-| **Cinco modelos à escolha** | Opus 5, Gemini 3.8 Flash, GPT-OSS 120B (Groq), Qwen 3.8 Max e Qwen3 8B rodando localmente no Ollama. O modelo é escolhido por mensagem. |
-| **Preview ao vivo** | O jogo roda num `iframe` servido pelo próprio sandbox. Ele recarrega a cada turno concluído, e o primeiro erro do jogo vai direto para o Sentry. |
-| **Créditos medidos por passo** | Um ledger append-only cobra cada passo do modelo pelo preço de tabela do provedor, separando tokens novos, lidos do cache e gravados no cache. |
-| **Base de SaaS pronta** | Organizations e Billing do Clerk: US$ 1 de crédito grátis por organização e US$ 10 por mês pago, com os créditos acumulando de um mês para o outro. |
-| **Multi-tenant de verdade** | Toda query é filtrada pela organização ativa. O worker, que roda sem sessão, só age sobre jogos cujo acesso já foi conferido no servidor. |
-| **Observabilidade ponta a ponta** | Sentry no navegador, no servidor, na edge e dentro do worker de tasks, com logs estruturados por turno, por ferramenta e por sandbox. |
+| **Game from text** | A prompt becomes a playable 3D game. The agent writes HTML, CSS and JavaScript on top of a custom engine built on Three.js. |
+| **One computer per game** | Every game gets its own Daytona sandbox: its own file system, process and port. Generated code never runs on the app's server. |
+| **Questions before building** | With the `ask_player` tool, the agent asks — as multiple choice — whatever the description left open: loop, goal, controls, world, visuals, feel, sound and challenge. |
+| **Durable agent** | The chat runs as a Trigger.dev `chat.agent`, decoupled from the HTTP request. Closing the tab doesn't kill the reply; reloading the page resumes the stream where it left off. |
+| **Five models to choose from** | Opus 5, Gemini 3.8 Flash, GPT-OSS 120B (Groq), Qwen 3.8 Max and Qwen3 8B running locally on Ollama. The model is chosen per message. |
+| **Live preview** | The game runs in an `iframe` served by its own sandbox. It reloads after every completed turn, and the game's first error goes straight to Sentry. |
+| **Credits metered per step** | An append-only ledger charges each model step at the provider's list price, separating fresh tokens, cache reads and cache writes. |
+| **SaaS foundation included** | Clerk Organizations and Billing: US$ 1 of free credit per organization and US$ 10 per paid month, with credits rolling over from one month to the next. |
+| **Real multi-tenancy** | Every query is filtered by the active organization. The worker, which runs without a session, only acts on games whose access was already checked on the server. |
+| **End-to-end observability** | Sentry in the browser, on the server, at the edge and inside the task worker, with structured logs per turn, per tool and per sandbox. |
 
 ---
 
-## 🛠️ Stack completa
+## 🛠️ Full stack
 
-| Camada | Tecnologia |
+| Layer | Technology |
 | --- | --- |
 | **Framework** | Next.js `16.2.6` (App Router, Turbopack), React `19.2.4`, TypeScript `^5` |
-| **Agente de IA** | AI SDK `ai` `^7.0.97` — `streamText`, tools tipadas com Zod, `useChat` |
-| **Agente durável** | Trigger.dev `4.5.16` — `chat.agent`, sessões e realtime · runtime `node-24` |
-| **Provedores de modelo** | `@ai-sdk/anthropic` · `@ai-sdk/google` · `@ai-sdk/groq` · `@ai-sdk/alibaba` · `ollama-ai-provider-v2` |
-| **Sandboxes** | Daytona `@daytona/sdk` `^0.211.2` — um sandbox por jogo, preview por URL assinada |
-| **Runtime do jogo** | Three.js `0.186.0` via import map (jsDelivr) + engine própria em `lib/games/runtime/engine` |
-| **Banco de dados** | Neon Postgres (driver HTTP `@neondatabase/serverless` `^1.1.0`) + Drizzle ORM `^0.45.2` |
+| **AI agent** | AI SDK `ai` `^7.0.97` — `streamText`, Zod-typed tools, `useChat` |
+| **Durable agent** | Trigger.dev `4.5.16` — `chat.agent`, sessions and realtime · `node-24` runtime |
+| **Model providers** | `@ai-sdk/anthropic` · `@ai-sdk/google` · `@ai-sdk/groq` · `@ai-sdk/alibaba` · `ollama-ai-provider-v2` |
+| **Sandboxes** | Daytona `@daytona/sdk` `^0.211.2` — one sandbox per game, preview via signed URL |
+| **Game runtime** | Three.js `0.186.0` via import map (jsDelivr) + custom engine in `lib/games/runtime/engine` |
+| **Database** | Neon Postgres (HTTP driver `@neondatabase/serverless` `^1.1.0`) + Drizzle ORM `^0.45.2` |
 | **Auth** | Clerk `^7.9.1` — Organizations, `OrganizationSwitcher`, `auth.protect()` |
-| **Billing** | Clerk Billing — `PricingTable` por organização, reconciliado com o ledger |
-| **Error tracking** | Sentry `^10.74.0` — `@sentry/nextjs` no app, `@sentry/node` no worker, source maps dos dois lados |
-| **Estilo / UI** | Tailwind CSS `^4`, shadcn/ui `^4.21.0` (estilo `base-nova` sobre Base UI `^1.8.0`), `lucide-react` |
-| **Validação** | Zod `^4.6.2` — entrada das tools, `clientData` do chat, schemas de saída |
+| **Billing** | Clerk Billing — per-organization `PricingTable`, reconciled with the ledger |
+| **Error tracking** | Sentry `^10.74.0` — `@sentry/nextjs` in the app, `@sentry/node` in the worker, source maps on both sides |
+| **Styling / UI** | Tailwind CSS `^4`, shadcn/ui `^4.21.0` (`base-nova` style on Base UI `^1.8.0`), `lucide-react` |
+| **Validation** | Zod `^4.6.2` — tool input, chat `clientData`, output schemas |
 
-> No Next.js 16 o *Middleware* virou **Proxy** — daí o `proxy.ts` na raiz no lugar do
-> `middleware.ts`. Ele roda `clerkMiddleware()` e mais nada.
+> In Next.js 16, *Middleware* became **Proxy** — hence the `proxy.ts` at the root instead of
+> `middleware.ts`. It runs `clerkMiddleware()` and nothing else.
 
-> O Neon entra com duas connection strings: a `DATABASE_URL` (com pool, via PgBouncer) para a
-> aplicação e a `DATABASE_URL_UNPOOLED` (direta) para o `drizzle-kit`. O PgBouncer trabalha em modo
-> transação e não aguenta as operações de sessão que o `drizzle-kit` usa.
+> Neon comes with two connection strings: `DATABASE_URL` (pooled, via PgBouncer) for the
+> application and `DATABASE_URL_UNPOOLED` (direct) for `drizzle-kit`. PgBouncer runs in transaction
+> mode and can't handle the session-level operations `drizzle-kit` uses.
 
-> **O schema é sincronizado, não migrado.** O projeto está em desenvolvimento e não tem compromisso de
-> compatibilidade, então mudanças no `lib/db/schema.ts` são aplicadas com `npm run db:push`. Não há
-> pasta `drizzle/` nem `drizzle-kit migrate` — e não deve haver.
+> **The schema is synced, not migrated.** The project is in development and has no compatibility
+> commitments, so changes to `lib/db/schema.ts` are applied with `npm run db:push`. There is no
+> `drizzle/` folder and no `drizzle-kit migrate` — and there shouldn't be.
 
 ---
 
-## 🤖 Os modelos
+## 🤖 The models
 
-O catálogo mora em dois arquivos de propósito: `lib/ai/model-catalog.ts` (ids, nomes e taglines,
-**seguro para o cliente**, lido pelo seletor de modelo) e `lib/ai/models.ts` (a instância de cada
-provedor, **só no servidor**). O `satisfies Record<GameModelId, …>` nos dois lados — e na tabela de
-preços — transforma um modelo esquecido em erro de compilação.
+The catalog lives in two files on purpose: `lib/ai/model-catalog.ts` (ids, names and taglines,
+**client-safe**, read by the model picker) and `lib/ai/models.ts` (each provider's instance,
+**server-only**). The `satisfies Record<GameModelId, …>` on both sides — and in the pricing table —
+turns a forgotten model into a compile error.
 
-| Modelo | id | Provedor | Chave | US$ / 1M tokens (entrada · saída) | Indicado para |
+| Model | id | Provider | Key | US$ / 1M tokens (input · output) | Best for |
 | --- | --- | --- | --- | --- | --- |
-| **Opus 5** ⭐ | `claude-opus-5` | Anthropic | `ANTHROPIC_API_KEY` | 5 · 25 | Jogo do zero — o padrão |
-| **Gemini 3.8 Flash** | `gemini-3.8-flash` | Google | `GOOGLE_GENERATIVE_AI_API_KEY` | 0,75 · 3,75 | Mudanças do dia a dia |
-| **GPT-OSS 120B** | `openai/gpt-oss-120b` | Groq | `GROQ_API_KEY` | 0,15 · 0,60 | Ajustes pequenos, resposta mais rápida |
-| **Qwen 3.8 Max** | `qwen3.8-max` | Alibaba Model Studio | `DASHSCOPE_API_KEY` | 2 · 6 | Construtor completo |
-| **Qwen3 8B (local)** | `qwen3:8b` | Ollama | — | grátis | Ajustes pequenos, privado |
-| *Claude Haiku 4.5* | `claude-haiku-4-5` | Anthropic | `ANTHROPIC_API_KEY` | — | Só gera o título do jogo |
+| **Opus 5** ⭐ | `claude-opus-5` | Anthropic | `ANTHROPIC_API_KEY` | 5 · 25 | Games from scratch — the default |
+| **Gemini 3.8 Flash** | `gemini-3.8-flash` | Google | `GOOGLE_GENERATIVE_AI_API_KEY` | 0.75 · 3.75 | Everyday changes |
+| **GPT-OSS 120B** | `openai/gpt-oss-120b` | Groq | `GROQ_API_KEY` | 0.15 · 0.60 | Small tweaks, fastest response |
+| **Qwen 3.8 Max** | `qwen3.8-max` | Alibaba Model Studio | `DASHSCOPE_API_KEY` | 2 · 6 | Full builder |
+| **Qwen3 8B (local)** | `qwen3:8b` | Ollama | — | free | Small tweaks, private |
+| *Claude Haiku 4.5* | `claude-haiku-4-5` | Anthropic | `ANTHROPIC_API_KEY` | — | Only generates the game title |
 
-> ⭐ **A `ANTHROPIC_API_KEY` é obrigatória** mesmo que você só use outros modelos: o título de todo
-> jogo novo é gerado pelo Haiku, dentro do `createGame`.
+> ⭐ **`ANTHROPIC_API_KEY` is required** even if you only use other models: every new game's title is
+> generated by Haiku, inside `createGame`.
 
-Os preços ficam em `lib/credits/pricing.ts`, com o preço de leitura e de escrita no cache de cada
-provedor, e foram conferidos em 2026-09-13. O Gemini está em preço promocional até 2026-12-31 e dobra
-em 2027-01-01.
+Prices live in `lib/credits/pricing.ts`, including each provider's cache read and cache write price,
+and were checked on 2026-09-13. Gemini is on promotional pricing until 2026-12-31 and doubles on
+2027-01-01.
 
-### As ferramentas do agente
+### The agent's tools
 
-| Ferramenta | O que faz | Detalhe |
+| Tool | What it does | Detail |
 | --- | --- | --- |
-| `write_file` | Cria ou sobrescreve um arquivo | Sempre recebe o conteúdo **completo**; pastas são criadas conforme precisa |
-| `replace_text` | Troca um trecho exato | O trecho precisa aparecer **uma vez só**, a menos que `replaceAll` seja `true` |
-| `read_file` | Lê um arquivo inteiro | O agente é instruído a ler antes de editar |
-| `list_files` | Lista a pasta do jogo | Recursivo, até 10 níveis |
-| `delete_file` | Apaga um arquivo ou uma pasta | Recursivo |
-| `ask_player` | Pergunta de múltipla escolha | 2 a 4 opções, sobre uma de 8 dimensões do jogo. **Não tem `execute`**: quem responde é a pessoa |
+| `write_file` | Creates or overwrites a file | Always receives the **full** content; folders are created as needed |
+| `replace_text` | Replaces an exact snippet | The snippet must appear **exactly once**, unless `replaceAll` is `true` |
+| `read_file` | Reads a whole file | The agent is instructed to read before editing |
+| `list_files` | Lists the game folder | Recursive, up to 10 levels |
+| `delete_file` | Deletes a file or folder | Recursive |
+| `ask_player` | Multiple-choice question | 2 to 4 options, about one of 8 game dimensions. **Has no `execute`**: the person answers it |
 
-Todo caminho é resolvido contra `/home/daytona/game` e recusado se sair de lá — `../.bashrc` e
-`/etc/passwd` param no `resolveGamePath`.
+Every path is resolved against `/home/daytona/game` and rejected if it escapes it — `../.bashrc` and
+`/etc/passwd` stop at `resolveGamePath`.
 
 ---
 
-## ⚙️ Como funciona
+## ⚙️ How it works
 
-### O caminho de um jogo novo
+### The path of a new game
 
 ```mermaid
 %%{init: {'themeVariables': {'clusterBkg': 'rgba(127,127,127,0.14)', 'clusterBorder': 'rgba(127,127,127,0.50)', 'noteBkgColor': 'rgba(127,127,127,0.14)', 'noteBorderColor': 'rgba(127,127,127,0.50)', 'labelBoxBkgColor': 'rgba(127,127,127,0.14)', 'labelBoxBorderColor': 'rgba(127,127,127,0.50)'}}}%%
 sequenceDiagram
     autonumber
-    actor P as 👤 Pessoa
-    participant UI as 🖥️ Navegador
+    actor P as 👤 Person
+    participant UI as 🖥️ Browser
     participant N as ▲ Next.js
     participant PG as 🐘 Neon
-    participant T as 🔵 Worker game-chat
-    participant M as 🤖 Modelo
+    participant T as 🔵 game-chat worker
+    participant M as 🤖 Model
     participant D as 📦 Daytona
 
-    P->>UI: descreve o jogo e escolhe o modelo
-    UI->>N: createGame com prompt e modelId
-    N->>N: auth — exige userId e orgId
-    N->>M: generateText com Haiku 4.5 — título
-    N->>PG: INSERT games com o prompt como 1a mensagem
-    N-->>UI: redirect para /games/id?model=...
+    P->>UI: describes the game and picks the model
+    UI->>N: createGame with prompt and modelId
+    N->>N: auth — requires userId and orgId
+    N->>M: generateText with Haiku 4.5 — title
+    N->>PG: INSERT games with the prompt as the first message
+    N-->>UI: redirect to /games/id?model=...
 
-    UI->>UI: a thread termina numa mensagem do usuário — regenerate
+    UI->>UI: the thread ends in a user message — regenerate
     UI->>N: startChatSession
-    N->>PG: hasCredits da organização
-    N->>T: cria a sessão e a primeira run — idempotente por chatId
-    N-->>UI: token público preso à sessão, válido por 1h
+    N->>PG: hasCredits for the organization
+    N->>T: creates the session and the first run — idempotent by chatId
+    N-->>UI: public token bound to the session, valid for 1h
 
-    T->>D: onChatStart — daytona.create e seed do runtime
+    T->>D: onChatStart — daytona.create and runtime seed
     T->>PG: UPDATE games SET sandbox_id
-    T->>PG: hydrateMessages — carrega a thread salva
+    T->>PG: hydrateMessages — loads the saved thread
 
-    loop até 30 passos
-        T->>M: streamText com instruções e ferramentas
-        M-->>T: texto e tool calls
+    loop up to 30 steps
+        T->>M: streamText with instructions and tools
+        M-->>T: text and tool calls
         T->>D: read, write, replace, list, delete
-        T->>PG: chargeStep — INSERT no ledger
-        T-->>UI: stream — texto, ferramentas e data-balance
+        T->>PG: chargeStep — INSERT into the ledger
+        T-->>UI: stream — text, tools and data-balance
     end
 
-    T->>PG: saveGameMessages com lastEventId
+    T->>PG: saveGameMessages with lastEventId
     T-->>UI: turn-completed
     UI->>N: GET /api/games/id/preview
-    N->>D: startGameServer — acorda o sandbox e sobe o servidor na 8080
-    N-->>UI: URL de preview assinada
-    UI->>D: o iframe carrega o jogo
+    N->>D: startGameServer — wakes the sandbox and starts the server on 8080
+    N-->>UI: signed preview URL
+    UI->>D: the iframe loads the game
 ```
 
-O navegador conversa com o Trigger.dev **direto**, pelo `useTriggerChatTransport`. O Next.js só faz
-duas coisas no chat: abrir a sessão (`startChatSession`) e emitir tokens (`mintChatAccessToken`),
-sempre depois de conferir que o jogo é da organização de quem pediu.
+The browser talks to Trigger.dev **directly**, through `useTriggerChatTransport`. Next.js does only
+two things in the chat: it opens the session (`startChatSession`) and issues tokens
+(`mintChatAccessToken`), always after checking that the game belongs to the requester's organization.
 
-### Um jogo = um chat = um sandbox
+### One game = one chat = one sandbox
 
-O id do chat **é** o id do jogo. A coluna `games.messages` é a fonte da verdade da conversa: o
-`hydrateMessages` carrega a thread do banco a cada turno, e o cliente manda só a mensagem nova — ou
-nenhuma, quando quer uma resposta para a thread já salva, como no primeiro prompt.
+The chat id **is** the game id. The `games.messages` column is the source of truth for the
+conversation: `hydrateMessages` loads the thread from the database every turn, and the client sends
+only the new message — or none, when it wants a reply to the thread that's already saved, as with the
+first prompt.
 
-| O quê | Onde mora | Quem escreve |
+| What | Where it lives | Who writes it |
 | --- | --- | --- |
-| Conversa | `games.messages` (jsonb, formato `UIMessage` do AI SDK) | o worker, antes do modelo começar e ao fim de cada turno |
-| Cursor do stream | `games.last_event_id` | o worker, no **mesmo UPDATE** da conversa |
-| Arquivos do jogo | `/home/daytona/game` no sandbox | as ferramentas do agente |
-| Sandbox | `games.sandbox_id` + label `gameId` no Daytona | o `onChatStart` |
-| Créditos | `credit_ledger` | cobranças por passo e concessões mensais |
+| Conversation | `games.messages` (jsonb, AI SDK `UIMessage` format) | the worker, before the model starts and at the end of each turn |
+| Stream cursor | `games.last_event_id` | the worker, in the **same UPDATE** as the conversation |
+| Game files | `/home/daytona/game` in the sandbox | the agent's tools |
+| Sandbox | `games.sandbox_id` + `gameId` label in Daytona | `onChatStart` |
+| Credits | `credit_ledger` | per-step charges and monthly grants |
 
-### A pergunta ao jogador (human-in-the-loop)
+### Asking the player (human-in-the-loop)
 
 ```mermaid
 %%{init: {'themeVariables': {'clusterBkg': 'rgba(127,127,127,0.14)', 'clusterBorder': 'rgba(127,127,127,0.50)', 'noteBkgColor': 'rgba(127,127,127,0.14)', 'noteBorderColor': 'rgba(127,127,127,0.50)', 'labelBoxBkgColor': 'rgba(127,127,127,0.14)', 'labelBoxBorderColor': 'rgba(127,127,127,0.50)'}}}%%
 stateDiagram-v2
-    [*] --> Respondendo: turno começa
-    Respondendo --> Aguardando: modelo chama ask_player
-    Aguardando --> Respondida: pessoa escolhe uma opção
-    Respondida --> Respondendo: sendAutomaticallyWhen abre o turno seguinte
-    Respondendo --> Concluido: modelo termina sem pergunta
-    Concluido --> [*]
+    [*] --> Responding: turn starts
+    Responding --> Waiting: model calls ask_player
+    Waiting --> Answered: person picks an option
+    Answered --> Responding: sendAutomaticallyWhen opens the next turn
+    Responding --> Done: model finishes without a question
+    Done --> [*]
 
-    note right of Aguardando
-        O turno termina com a chamada pendente.
-        O composer fica travado até a resposta,
-        porque uma mensagem nova deixaria a
-        pergunta sem resposta.
+    note right of Waiting
+        The turn ends with the call pending.
+        The composer stays locked until the answer,
+        because a new message would leave the
+        question unanswered.
     end note
 ```
 
-Como o `ask_player` não tem `execute`, chamar a ferramenta **encerra o turno** com a chamada em
-`input-available`. A resposta volta como uma cópia enxuta da mensagem do assistente, e o
-`applyAnswers` a encaixa na resposta salva **pelo `toolCallId`** — a cópia nem sempre mantém o id da
-mensagem original. A resposta é salva antes de o modelo voltar a falar, então um reload no meio do
-caminho não faz a pergunta de novo.
+Since `ask_player` has no `execute`, calling the tool **ends the turn** with the call in
+`input-available`. The answer comes back as a trimmed-down copy of the assistant message, and
+`applyAnswers` fits it into the saved reply **by `toolCallId`** — the copy doesn't always keep the
+original message id. The answer is saved before the model speaks again, so a reload midway doesn't
+ask the question again.
 
-### Recarregar no meio da resposta
+### Reloading mid-reply
 
-O `lastEventId` salvo com a conversa vira `initialSession` na página do jogo, e o `useChat` sobe com
-`resume: true`. Dois `TransformStream` mantêm o stream coerente:
+The `lastEventId` saved with the conversation becomes `initialSession` on the game page, and
+`useChat` starts with `resume: true`. Two `TransformStream`s keep the stream consistent:
 
-- **`fromTurnStart`** descarta o que um turno novo repete do turno anterior. Depois de um *stop*, o
-  transport retoma do último chunk lido e reenvia o resto daquele turno: deltas de partes que esse
-  stream nunca abriu, que o `useChat` recusaria (`Received tool-input-delta for missing tool call`).
-  Partes `data-*` e erros passam sempre.
-- **`withSavedReply`** recoloca as partes salvas na frente das retomadas quando a resposta em curso
-  continua a última salva. Sem isso, a pergunta respondida pisca e some.
+- **`fromTurnStart`** drops whatever a new turn repeats from the previous one. After a *stop*, the
+  transport resumes from the last chunk it read and resends the rest of that turn: deltas for parts
+  this stream never opened, which `useChat` would reject (`Received tool-input-delta for missing tool
+  call`). `data-*` parts and errors always pass through.
+- **`withSavedReply`** puts the saved parts back in front of the resumed ones when the reply in
+  progress continues the last saved one. Without it, the answered question flickers and disappears.
 
-### O preview
+### The preview
 
 ```mermaid
 %%{init: {'themeVariables': {'clusterBkg': 'rgba(127,127,127,0.14)', 'clusterBorder': 'rgba(127,127,127,0.50)', 'noteBkgColor': 'rgba(127,127,127,0.14)', 'noteBorderColor': 'rgba(127,127,127,0.50)', 'labelBoxBkgColor': 'rgba(127,127,127,0.14)', 'labelBoxBorderColor': 'rgba(127,127,127,0.50)'}}}%%
 flowchart LR
-    T["Turno concluído<br/>revision + 1"] --> R["GET /api/games/id/preview"]
-    R --> G{"getGame<br/>é da org de quem pede?"}
-    G -->|"não"| NF["404"]
-    G -->|"sim"| W["getStartedSandbox<br/>acorda se estiver parado"]
-    W --> U{"curl localhost:8080<br/>servidor de pé?"}
-    U -->|"não"| S["nohup python3 -m http.server 8080"]
-    U -->|"sim"| L
-    S --> L["getSignedPreviewUrl<br/>token no host, 1h"]
-    L --> I["iframe remontado<br/>key = revision"]
-    I --> C{"report.js respondeu<br/>game-status?"}
-    C -->|"sim"| Show["Mostra o jogo"]
-    C -->|"não, em 1,5s"| Warn["Mostra a página mesmo assim<br/>ex.: aviso do Daytona"]
-    Show --> Ping["Ping a cada 2s<br/>1o erro vai para o Sentry"]
+    T["Turn completed<br/>revision + 1"] --> R["GET /api/games/id/preview"]
+    R --> G{"getGame<br/>belongs to the requester's org?"}
+    G -->|"no"| NF["404"]
+    G -->|"yes"| W["getStartedSandbox<br/>wakes it if stopped"]
+    W --> U{"curl localhost:8080<br/>server up?"}
+    U -->|"no"| S["nohup python3 -m http.server 8080"]
+    U -->|"yes"| L
+    S --> L["getSignedPreviewUrl<br/>token in the host, 1h"]
+    L --> I["iframe remounted<br/>key = revision"]
+    I --> C{"report.js answered<br/>game-status?"}
+    C -->|"yes"| Show["Show the game"]
+    C -->|"no, within 1.5s"| Warn["Show the page anyway<br/>e.g. the Daytona warning"]
+    Show --> Ping["Ping every 2s<br/>1st error goes to Sentry"]
 ```
 
-- **A URL é assinada** porque o token precisa estar na própria URL: um `iframe` não manda header. O
-  token vai no host, então a origem é removida do stack antes de o erro ser logado.
-- **O `iframe` é remontado a cada turno** (`key={revision}`). O Daytona pode devolver a mesma URL
-  depois de uma atualização, e um `src` igual não recarrega nada.
-- **A página só aparece quando o jogo responde.** O `report.js` (primeiro script do `<head>` de todo
-  jogo) responde a cada `game-ping` com um `game-status`. Até isso acontecer, o `iframe` fica coberto
-  por um fundo `#262624` — assim a página "Redirecting…" do Daytona, que não tem estilo, nunca pisca
-  em branco.
-- **O primeiro erro do jogo vai para o Sentry**, com o stack inteiro. O `report.js` pega erros de
-  script e de carregamento (fase de captura), `unhandledrejection` e os erros que a própria engine
-  captura via `window.recordGameError`.
+- **The URL is signed** because the token has to be in the URL itself: an `iframe` doesn't send
+  headers. The token goes in the host, so the origin is stripped from the stack before the error is
+  logged.
+- **The `iframe` is remounted every turn** (`key={revision}`). Daytona may return the same URL after
+  an update, and an unchanged `src` reloads nothing.
+- **The page only shows once the game responds.** `report.js` (the first script in every game's
+  `<head>`) answers each `game-ping` with a `game-status`. Until that happens, the `iframe` is covered
+  by a `#262624` background — so Daytona's unstyled "Redirecting…" page never flashes white.
+- **The game's first error goes to Sentry**, with the full stack. `report.js` catches script and
+  resource-loading errors (capture phase), `unhandledrejection` and the errors the engine itself
+  catches via `window.recordGameError`.
 
-### Créditos
+### Credits
 
 ```mermaid
 %%{init: {'themeVariables': {'clusterBkg': 'rgba(127,127,127,0.14)', 'clusterBorder': 'rgba(127,127,127,0.50)', 'noteBkgColor': 'rgba(127,127,127,0.14)', 'noteBorderColor': 'rgba(127,127,127,0.50)', 'labelBoxBkgColor': 'rgba(127,127,127,0.14)', 'labelBoxBorderColor': 'rgba(127,127,127,0.50)'}}}%%
 flowchart TB
-    Start["Sessão nova ou turno novo"] --> Bal{"getBalance maior que 0?<br/>US$ 1 grátis + soma do ledger"}
-    Bal -->|"sim"| Run["streamText roda"]
-    Bal -->|"não"| Rec["reconcileCredits<br/>assinatura da org no Clerk Billing"]
-    Rec --> Grant["INSERT month:AAAA-MM<br/>+ US$ 10 por mês pago<br/>ON CONFLICT DO NOTHING"]
-    Grant --> Bal2{"saldo maior que 0 agora?"}
-    Bal2 -->|"sim"| Run
-    Bal2 -->|"não"| Block["data-out-of-credits<br/>transiente, nada é salvo"]
-    Run --> Step["Cada passo do modelo"]
-    Step --> Charge["INSERT step:responseId<br/>valor negativo<br/>ON CONFLICT DO NOTHING"]
-    Charge --> Push["data-balance<br/>a sidebar atualiza ao vivo"]
+    Start["New session or new turn"] --> Bal{"getBalance greater than 0?<br/>US$ 1 free + ledger sum"}
+    Bal -->|"yes"| Run["streamText runs"]
+    Bal -->|"no"| Rec["reconcileCredits<br/>org subscription in Clerk Billing"]
+    Rec --> Grant["INSERT month:YYYY-MM<br/>+ US$ 10 per paid month<br/>ON CONFLICT DO NOTHING"]
+    Grant --> Bal2{"balance greater than 0 now?"}
+    Bal2 -->|"yes"| Run
+    Bal2 -->|"no"| Block["data-out-of-credits<br/>transient, nothing is saved"]
+    Run --> Step["Each model step"]
+    Step --> Charge["INSERT step:responseId<br/>negative amount<br/>ON CONFLICT DO NOTHING"]
+    Charge --> Push["data-balance<br/>the sidebar updates live"]
 ```
 
-- **O saldo é a soma do ledger** mais US$ 1 que não é uma linha — uma organização sem linha nenhuma lê
-  exatamente US$ 1,00.
-- **A unidade é o bilionésimo de dólar** (`DOLLAR = 1_000_000_000`). Um passo barato custa fração de
-  centavo, e a soma precisa fechar exata. `bigint` em modo `number` é exato até 2^53, cerca de US$ 9
-  milhões.
-- **Toda escrita é idempotente.** A chave única `(org_id, entry_key)` garante que o mesmo passo
-  (`step:<responseId>`) nunca seja cobrado duas vezes nem o mesmo mês (`month:2026-09`) concedido
-  duas vezes.
-- **A reconciliação é preguiçosa.** Ela só consulta o Clerk quando o saldo zera e quando alguém abre
-  `/billing`. Um saldo zerado pode significar só que um mês pago renovou desde a última sincronização.
-- **Uma resposta em curso pode terminar abaixo de zero.** O bloqueio vale para o turno seguinte, e uma
-  cobrança que falha é reportada ao Sentry sem cortar a resposta.
+- **The balance is the ledger sum** plus US$ 1 that isn't a row — an organization with no rows at all
+  reads exactly US$ 1.00.
+- **The unit is a billionth of a dollar** (`DOLLAR = 1_000_000_000`). A cheap step costs a fraction
+  of a cent, and the sum has to come out exact. `bigint` in `number` mode is exact up to 2^53, about
+  US$ 9 million.
+- **Every write is idempotent.** The unique key `(org_id, entry_key)` ensures the same step
+  (`step:<responseId>`) is never charged twice and the same month (`month:2026-09`) is never granted
+  twice.
+- **Reconciliation is lazy.** It only queries Clerk when the balance hits zero and when someone opens
+  `/billing`. A zero balance may just mean a paid month has renewed since the last sync.
+- **A reply in progress can end below zero.** The block applies to the next turn, and a charge that
+  fails is reported to Sentry without cutting the reply short.
 
 ---
 
-## 🏗️ Arquitetura
+## 🏗️ Architecture
 
-### Visão geral
+### Overview
 
 ```mermaid
 %%{init: {'themeVariables': {'clusterBkg': 'rgba(127,127,127,0.14)', 'clusterBorder': 'rgba(127,127,127,0.50)', 'noteBkgColor': 'rgba(127,127,127,0.14)', 'noteBorderColor': 'rgba(127,127,127,0.50)', 'labelBoxBkgColor': 'rgba(127,127,127,0.14)', 'labelBoxBorderColor': 'rgba(127,127,127,0.50)'}}}%%
 flowchart TB
-    Pessoa(["👤 Pessoa da organização"])
+    Person(["👤 Organization member"])
 
-    subgraph Nav["🖥️ Navegador"]
+    subgraph Nav["🖥️ Browser"]
         Chat["Chat<br/>useChat + useTriggerChatTransport"]
-        Preview["Preview<br/>iframe + ping do report.js"]
-        Side["Sidebar<br/>jogos, créditos, organização"]
+        Preview["Preview<br/>iframe + report.js ping"]
+        Side["Sidebar<br/>games, credits, organization"]
     end
 
     subgraph Web["▲ Next.js 16 · App Router"]
-        Proxy["proxy.ts<br/>clerkMiddleware — só dá contexto"]
-        Paginas["Páginas e layouts<br/>auth.protect"]
+        Proxy["proxy.ts<br/>clerkMiddleware — context only"]
+        Pages["Pages and layouts<br/>auth.protect"]
         Actions["Server Functions<br/>createGame · startChatSession<br/>mintChatAccessToken · rename · delete"]
-        Rota["Route handlers<br/>preview · monitoring"]
-        Queries["lib/games/queries.ts<br/>toda query filtra por orgId"]
+        Routes["Route handlers<br/>preview · monitoring"]
+        Queries["lib/games/queries.ts<br/>every query filters by orgId"]
     end
 
-    Clerk[("🔐 Clerk<br/>login, organizações e planos")]
-    Banco[("🐘 Neon Postgres<br/>games · credit_ledger")]
+    Clerk[("🔐 Clerk<br/>sign-in, organizations and plans")]
+    DB[("🐘 Neon Postgres<br/>games · credit_ledger")]
 
     subgraph Worker["🔵 Trigger.dev · chat.agent game-chat"]
-        Hyd["hydrateMessages<br/>thread do banco"]
-        Run["run — streamText<br/>até 30 passos"]
-        Tools["Ferramentas<br/>arquivos + ask_player"]
-        Done["onTurnComplete<br/>salva thread e cursor"]
+        Hyd["hydrateMessages<br/>thread from the database"]
+        Run["run — streamText<br/>up to 30 steps"]
+        Tools["Tools<br/>files + ask_player"]
+        Done["onTurnComplete<br/>saves thread and cursor"]
     end
 
-    LLM[("🤖 Provedores<br/>Anthropic · Google · Groq<br/>Alibaba · Ollama")]
+    LLM[("🤖 Providers<br/>Anthropic · Google · Groq<br/>Alibaba · Ollama")]
 
-    subgraph Box["📦 Daytona · um sandbox por jogo"]
+    subgraph Box["📦 Daytona · one sandbox per game"]
         Files["/home/daytona/game<br/>index.html · engine/ · report.js"]
         Srv["python3 http.server :8080"]
-        PxD["Proxy de preview<br/>URL assinada"]
+        PxD["Preview proxy<br/>signed URL"]
     end
 
-    Sentry[("🟣 Sentry<br/>erros, logs, traces, replay")]
+    Sentry[("🟣 Sentry<br/>errors, logs, traces, replay")]
 
-    Pessoa --> Chat
-    Pessoa --> Preview
-    Pessoa -->|"login e organização ativa"| Clerk
-    Clerk -->|"sessão"| Proxy
-    Proxy --> Paginas
+    Person --> Chat
+    Person --> Preview
+    Person -->|"sign-in and active organization"| Clerk
+    Clerk -->|"session"| Proxy
+    Proxy --> Pages
     Proxy --> Actions
-    Proxy --> Rota
-    Paginas --> Queries
+    Proxy --> Routes
+    Pages --> Queries
     Actions --> Queries
-    Rota --> Queries
-    Queries --> Banco
+    Routes --> Queries
+    Queries --> DB
 
-    Chat -->|"abre sessão e pega token"| Actions
-    Actions -->|"sessão + primeira run"| Hyd
-    Chat <-->|"stream realtime<br/>token preso à sessão"| Run
-    Hyd --> Banco
+    Chat -->|"opens session and gets token"| Actions
+    Actions -->|"session + first run"| Hyd
+    Chat <-->|"realtime stream<br/>session-bound token"| Run
+    Hyd --> DB
     Hyd --> Run
     Run --> LLM
     Run --> Tools
-    Tools -->|"SDK do Daytona"| Files
-    Run -->|"cobra cada passo"| Banco
+    Tools -->|"Daytona SDK"| Files
+    Run -->|"charges each step"| DB
     Run --> Done
-    Done --> Banco
-    Run -->|"reconcilia créditos"| Clerk
+    Done --> DB
+    Run -->|"reconciles credits"| Clerk
 
-    Preview -->|"pede a URL"| Rota
-    Rota -->|"acorda e sobe o servidor"| Srv
+    Preview -->|"requests the URL"| Routes
+    Routes -->|"wakes it and starts the server"| Srv
     Srv --> Files
-    Preview -->|"carrega o jogo"| PxD
+    Preview -->|"loads the game"| PxD
     PxD --> Srv
 
-    Web -.->|"erros e logs"| Sentry
-    Worker -.->|"onFailure + logs por turno"| Sentry
-    Nav -.->|"túnel /monitoring"| Sentry
+    Web -.->|"errors and logs"| Sentry
+    Worker -.->|"onFailure + per-turn logs"| Sentry
+    Nav -.->|"/monitoring tunnel"| Sentry
 ```
 
-### Organograma do sistema
+### System map
 
-Quem é responsável pelo quê, de cima para baixo:
+Who is responsible for what, from top to bottom:
 
 ```mermaid
 %%{init: {'themeVariables': {'clusterBkg': 'rgba(127,127,127,0.14)', 'clusterBorder': 'rgba(127,127,127,0.50)', 'noteBkgColor': 'rgba(127,127,127,0.14)', 'noteBorderColor': 'rgba(127,127,127,0.50)', 'labelBoxBkgColor': 'rgba(127,127,127,0.14)', 'labelBoxBorderColor': 'rgba(127,127,127,0.50)'}}}%%
 flowchart TD
-    Root["🎮 Sandbox"]
+    Root["🎮 Playforge"]
 
-    Root --> Web["▲ App Next.js<br/>app/ · components/"]
-    Root --> Dom["🧠 Domínio compartilhado<br/>lib/"]
-    Root --> Wk["🔵 Worker Trigger.dev<br/>trigger/"]
-    Root --> Rt["🕹️ Runtime do jogo<br/>lib/games/runtime/"]
-    Root --> Cfg["⚙️ Configuração<br/>raiz do repositório"]
+    Root --> Web["▲ Next.js app<br/>app/ · components/"]
+    Root --> Dom["🧠 Shared domain<br/>lib/"]
+    Root --> Wk["🔵 Trigger.dev worker<br/>trigger/"]
+    Root --> Rt["🕹️ Game runtime<br/>lib/games/runtime/"]
+    Root --> Cfg["⚙️ Configuration<br/>repository root"]
 
-    Web --> W1["Rotas protegidas<br/>app/(app): home, games/id, billing"]
-    Web --> W2["Rotas públicas<br/>sign-in · sign-up"]
+    Web --> W1["Protected routes<br/>app/(app): home, games/id, billing"]
+    Web --> W2["Public routes<br/>sign-in · sign-up"]
     Web --> W3["Route handlers<br/>api/games/id/preview · monitoring"]
-    Web --> W4["Chat e preview<br/>chat-thread · chat-preview · game-chat"]
+    Web --> W4["Chat and preview<br/>chat-thread · chat-preview · game-chat"]
     Web --> W5["Design system<br/>components/ui — shadcn base-nova"]
 
-    Dom --> D1["lib/ai<br/>catálogo, modelos, agente"]
+    Dom --> D1["lib/ai<br/>catalog, models, agent"]
     Dom --> D2["lib/games<br/>actions, queries, tools, instructions"]
     Dom --> D3["lib/credits<br/>ledger, pricing, reconcile"]
-    Dom --> D4["lib/daytona<br/>ciclo de vida do sandbox"]
-    Dom --> D5["lib/db<br/>schema e cliente Drizzle"]
+    Dom --> D4["lib/daytona<br/>sandbox lifecycle"]
+    Dom --> D5["lib/db<br/>schema and Drizzle client"]
 
-    Wk --> K1["chat.ts<br/>o agente game-chat"]
-    Wk --> K2["init.ts<br/>Sentry do worker"]
-    Wk --> K3["example.ts · sentry-test.ts<br/>tasks de apoio"]
+    Wk --> K1["chat.ts<br/>the game-chat agent"]
+    Wk --> K2["init.ts<br/>worker Sentry setup"]
+    Wk --> K3["example.ts · sentry-test.ts<br/>support tasks"]
 
-    Rt --> R1["index.html + style.css<br/>página de boas-vindas"]
+    Rt --> R1["index.html + style.css<br/>welcome page"]
     Rt --> R2["engine/<br/>core, input, hud, audio, physics,<br/>particles, camera, models, world, effects"]
-    Rt --> R3["report.js<br/>ponte de erros com o app"]
+    Rt --> R3["report.js<br/>error bridge to the app"]
 
     Cfg --> C1["trigger.config.ts · next.config.ts"]
     Cfg --> C2["drizzle.config.ts · neon.ts"]
     Cfg --> C3["proxy.ts · instrumentation*.ts · sentry.*.config.ts"]
 ```
 
-### Onde cada código roda
+### Where each piece of code runs
 
-Esse é o ponto que mais pega quem chega no projeto: **o mesmo `lib/` roda em dois processos
-diferentes**, e só um deles é Next.js.
+This is what trips up most people new to the project: **the same `lib/` runs in two different
+processes**, and only one of them is Next.js.
 
-| Processo | O que roda ali | Consequência |
+| Process | What runs there | Consequence |
 | --- | --- | --- |
-| **Servidor Next.js** | páginas, Server Functions, route handlers, `lib/*` | tem `auth()` do Clerk; usa `@sentry/nextjs` |
-| **Worker do Trigger.dev** | `trigger/chat.ts` e o `lib/*` que ele importa (tools, créditos, Daytona, banco) | **não tem request nem `auth()`**. Usa `@sentry/node` e `@clerk/backend`, e descobre a organização pela linha do jogo |
-| **Navegador do app** | componentes `"use client"`, `useChat`, transport do Trigger.dev | só recebe tokens escopados e mensagens de erro genéricas |
-| **Sandbox do Daytona** | os arquivos do jogo e um `http.server` | executa código gerado pelo modelo — isolado do app |
-| **`iframe` do preview** | o jogo, em outra origem | conversa com o app só por `postMessage` com a origem conferida |
+| **Next.js server** | pages, Server Functions, route handlers, `lib/*` | has Clerk's `auth()`; uses `@sentry/nextjs` |
+| **Trigger.dev worker** | `trigger/chat.ts` and the `lib/*` it imports (tools, credits, Daytona, database) | **has no request and no `auth()`**. Uses `@sentry/node` and `@clerk/backend`, and finds the organization from the game row |
+| **App browser** | `"use client"` components, `useChat`, the Trigger.dev transport | only receives scoped tokens and generic error messages |
+| **Daytona sandbox** | the game files and an `http.server` | runs model-generated code — isolated from the app |
+| **Preview `iframe`** | the game, on another origin | talks to the app only through `postMessage`, with the origin checked |
 
-Por isso o `lib/` compartilhado importa `@sentry/node` (o SDK do Next.js é construído sobre ele e
-divide o mesmo client) e por isso o `trigger.config.ts` usa a condição `react-server`: os módulos que
-importam `server-only` resolvem para a versão vazia dentro do worker.
+That's why the shared `lib/` imports `@sentry/node` (the Next.js SDK is built on top of it and shares
+the same client), and why `trigger.config.ts` uses the `react-server` condition: modules that import
+`server-only` resolve to the empty version inside the worker.
 
-### Multi-tenancy e autenticação
+### Multi-tenancy and authentication
 
-**A autenticação fica no recurso, não no proxy.** O `proxy.ts` roda `clerkMiddleware()` e mais nada.
-Server Functions são chamadas por **id**, não por rota, então uma trava por caminho no middleware não
-as protegeria.
+**Authentication lives on the resource, not in the proxy.** `proxy.ts` runs `clerkMiddleware()` and
+nothing else. Server Functions are called by **id**, not by route, so a path-based lock in the
+middleware wouldn't protect them.
 
-| Superfície | Como se protege | Resposta a quem não pode |
+| Surface | How it's protected | Response to unauthorized callers |
 | --- | --- | --- |
-| Páginas | `auth.protect()` | redireciona para `/sign-in` |
-| `createGame` · `renameGame` · `deleteGame` | exigem `userId` e `orgId`, e o `getGame` confere o dono | erro |
-| `startChatSession` · `mintChatAccessToken` | `assertCanChat` — o chatId vem do navegador | erro, logado como `Chat access denied` |
-| `GET /api/games/[id]/preview` | `getGame` com escopo da organização | `404` |
-| Queries | `getGame` / `listGames` sempre filtram por `orgId` e validam o UUID antes de ir ao banco | `null` / `[]` |
-| Worker | só age sobre um `chatId` cuja sessão foi aberta por uma Server Function que conferiu o acesso | — |
+| Pages | `auth.protect()` | redirects to `/sign-in` |
+| `createGame` · `renameGame` · `deleteGame` | require `userId` and `orgId`, and `getGame` checks ownership | error |
+| `startChatSession` · `mintChatAccessToken` | `assertCanChat` — the chatId comes from the browser | error, logged as `Chat access denied` |
+| `GET /api/games/[id]/preview` | `getGame` scoped to the organization | `404` |
+| Queries | `getGame` / `listGames` always filter by `orgId` and validate the UUID before hitting the database | `null` / `[]` |
+| Worker | only acts on a `chatId` whose session was opened by a Server Function that checked access | — |
 
-O token que o navegador recebe do Trigger.dev é **escopado à sessão daquele jogo** (`read` e `write`
-em `sessions: chatId`) e expira em 1 hora; o transport pede outro sozinho.
+The token the browser gets from Trigger.dev is **scoped to that game's session** (`read` and `write`
+on `sessions: chatId`) and expires in 1 hour; the transport requests a new one on its own.
 
-### Observabilidade
+### Observability
 
-| Onde | Como chega no Sentry |
+| Where | How it reaches Sentry |
 | --- | --- |
-| Navegador | `instrumentation-client.ts` — traces (100% em dev, 10% em produção), Session Replay (10%, 100% com erro), túnel em `/monitoring` |
-| Servidor / Edge | `instrumentation.ts` + `onRequestError`, com `includeLocalVariables` |
-| Worker | `trigger/init.ts` — `tasks.onFailure` global depois das retentativas e `onStartAttempt` marcando cada log com a task e a run |
-| Turno do chat | `onTurnComplete` — um log por turno com modelo, tokens, ferramentas, erros de ferramenta e se ficou esperando o jogador |
-| Jogo | o primeiro erro de cada revisão, com o stack do jogo sem o token da URL |
-| Source maps | `withSentryConfig` no `next.config.ts` (app) e `sentryEsbuildPlugin` no `trigger.config.ts` (worker, só no deploy) |
+| Browser | `instrumentation-client.ts` — traces (100% in dev, 10% in production), Session Replay (10%, 100% on error), tunnel at `/monitoring` |
+| Server / Edge | `instrumentation.ts` + `onRequestError`, with `includeLocalVariables` |
+| Worker | `trigger/init.ts` — global `tasks.onFailure` after retries, and `onStartAttempt` tagging every log with the task and the run |
+| Chat turn | `onTurnComplete` — one log per turn with the model, tokens, tools, tool errors and whether it stopped to wait for the player |
+| Game | the first error of each revision, with the game's stack minus the URL token |
+| Source maps | `withSentryConfig` in `next.config.ts` (app) and `sentryEsbuildPlugin` in `trigger.config.ts` (worker, deploy only) |
 
-O túnel `/monitoring` é uma **rota própria**, e não o `tunnelRoute` do SDK: o rewrite repassaria os
-cookies do navegador — incluindo a sessão do Clerk — e a ingestão do Sentry recusa cabeçalhos
-grandes. A rota só encaminha envelopes do DSN do próprio projeto, então não vira relay aberto.
+The `/monitoring` tunnel is a **custom route**, not the SDK's `tunnelRoute`: the rewrite would
+forward the browser's cookies — including the Clerk session — and Sentry's ingestion rejects large
+headers. The route only forwards envelopes for the project's own DSN, so it can't become an open
+relay.
 
 ---
 
-## 📁 Estrutura do projeto
+## 📁 Project structure
 
-| Pasta | Responsabilidade |
+| Folder | Responsibility |
 | --- | --- |
-| **`app/`** | Roteia e protege. Nenhuma regra de negócio mora aqui. |
-| **`components/`** | A interface: chat, preview, sidebar e o design system em `ui/`. |
-| **`lib/`** | O domínio, compartilhado entre o Next.js e o worker. |
-| **`trigger/`** | As tasks do Trigger.dev — o agente e sua inicialização. |
-| **raiz** | Configuração de build, runtime e observabilidade. |
+| **`app/`** | Routes and protects. No business logic lives here. |
+| **`components/`** | The interface: chat, preview, sidebar and the design system in `ui/`. |
+| **`lib/`** | The domain, shared between Next.js and the worker. |
+| **`trigger/`** | The Trigger.dev tasks — the agent and its initialization. |
+| **root** | Build, runtime and observability configuration. |
 
-### `app/` — rotas
+### `app/` — routes
 
 ```
 app/
 ├── (app)/
-│   ├── layout.tsx                     sidebar + saldo de créditos da organização
+│   ├── layout.tsx                     sidebar + organization credit balance
 │   ├── page.tsx                       "What should we build today?" + composer
-│   ├── games/[id]/page.tsx            chat + preview; entrega o cursor para retomar
-│   └── billing/page.tsx               saldo, reconciliação e PricingTable
+│   ├── games/[id]/page.tsx            chat + preview; hands over the cursor to resume
+│   └── billing/page.tsx               balance, reconciliation and PricingTable
 │
-├── sign-in/[[...sign-in]]/            <SignIn /> do Clerk
-├── sign-up/[[...sign-up]]/            <SignUp /> do Clerk
+├── sign-in/[[...sign-in]]/            Clerk <SignIn />
+├── sign-up/[[...sign-up]]/            Clerk <SignUp />
 │
-├── api/games/[id]/preview/route.ts    acorda o sandbox e devolve a URL assinada
-├── monitoring/route.ts                túnel do Sentry (valida o DSN)
+├── api/games/[id]/preview/route.ts    wakes the sandbox and returns the signed URL
+├── monitoring/route.ts                Sentry tunnel (validates the DSN)
 ├── global-error.tsx
-└── layout.tsx                         ClerkProvider + ThemeProvider + fontes
+└── layout.tsx                         ClerkProvider + ThemeProvider + fonts
 ```
 
 ### `components/` — interface
 
 ```
 components/
-├── chat-thread.tsx                    useChat + transport, ask_player, retomada
-├── chat-composer.tsx                  campo de mensagem + seletor de modelo
-├── chat-preview.tsx                   iframe, cobertura e ping de erros
-├── game-chat.tsx                      painéis redimensionáveis thread | preview
-├── new-game-composer.tsx              prompt inicial e sugestões
-├── model-picker.tsx                   lê o model-catalog (seguro para o cliente)
-├── credit-balance.tsx                 contexto do saldo, atualizado pelo stream
-├── app-sidebar.tsx                    jogos, créditos, OrganizationSwitcher
+├── chat-thread.tsx                    useChat + transport, ask_player, resume
+├── chat-composer.tsx                  message field + model picker
+├── chat-preview.tsx                   iframe, cover and error ping
+├── game-chat.tsx                      resizable panels thread | preview
+├── new-game-composer.tsx              first prompt and suggestions
+├── model-picker.tsx                   reads the model-catalog (client-safe)
+├── credit-balance.tsx                 balance context, updated by the stream
+├── app-sidebar.tsx                    games, credits, OrganizationSwitcher
 ├── game-header.tsx · game-actions-menu.tsx
-├── theme-provider.tsx                 next-themes + atalho "d"
+├── theme-provider.tsx                 next-themes + "d" shortcut
 └── ui/                                shadcn/ui (base-nova)
 ```
 
-### `lib/` — domínio
+### `lib/` — domain
 
 ```
 lib/
 ├── ai/
-│   ├── model-catalog.ts               ids e nomes — sem import de provedor
-│   ├── models.ts                      id → instância do provedor (server-only)
-│   └── agent.ts                       modelo + instruções + limite de 30 passos
+│   ├── model-catalog.ts               ids and names — no provider imports
+│   ├── models.ts                      id → provider instance (server-only)
+│   └── agent.ts                       model + instructions + 30-step limit
 │
 ├── games/
-│   ├── actions.ts                     Server Functions: criar, sessão, token, renomear, apagar
-│   ├── queries.ts                     leituras com escopo de organização
-│   ├── messages.ts                    leituras e escritas do worker (sem auth)
-│   ├── tools.ts                       ferramentas de arquivo, presas a um jogo
-│   ├── ask-player.ts                  a pergunta ao jogador (sem execute)
+│   ├── actions.ts                     Server Functions: create, session, token, rename, delete
+│   ├── queries.ts                     organization-scoped reads
+│   ├── messages.ts                    worker reads and writes (no auth)
+│   ├── tools.ts                       file tools, bound to one game
+│   ├── ask-player.ts                  the question to the player (no execute)
 │   ├── instructions/                  system prompt: workflow · runtime · engine · design
-│   ├── runtime/                  ◄──  os arquivos que todo jogo novo recebe
-│   ├── seed.ts                        copia o runtime/ para o sandbox
+│   ├── runtime/                  ◄──  the files every new game receives
+│   ├── seed.ts                        copies runtime/ into the sandbox
 │   ├── suggestions.ts · title.ts
 │
 ├── credits/
-│   ├── ledger.ts                      saldo e cobrança por passo
-│   ├── pricing.ts                     preço por modelo e custo de um passo
-│   ├── reconcile.ts                   Clerk Billing → concessões mensais
-│   └── format.ts                      DOLLAR e formatação
+│   ├── ledger.ts                      balance and per-step charging
+│   ├── pricing.ts                     price per model and cost of a step
+│   ├── reconcile.ts                   Clerk Billing → monthly grants
+│   └── format.ts                      DOLLAR and formatting
 │
 ├── daytona/
-│   ├── client.ts                      new Daytona() — lê DAYTONA_API_KEY
-│   └── utils.ts                       criar, acordar, apagar, subir o servidor
+│   ├── client.ts                      new Daytona() — reads DAYTONA_API_KEY
+│   └── utils.ts                       create, wake, delete, start the server
 │
 └── db/
     ├── schema.ts                      games + credit_ledger
-    └── index.ts                       Drizzle sobre o driver HTTP do Neon
+    └── index.ts                       Drizzle over the Neon HTTP driver
 ```
 
-### Raiz — configuração
+### Root — configuration
 
 ```
-proxy.ts                               clerkMiddleware() e mais nada
-trigger.config.ts                      node-24, Daytona external, runtime/ copiado, source maps
+proxy.ts                               clerkMiddleware() and nothing else
+trigger.config.ts                      node-24, Daytona external, runtime/ copied, source maps
 next.config.ts                         withSentryConfig
-drizzle.config.ts                      aponta para a DATABASE_URL_UNPOOLED
-neon.ts                                política de branches (TTL de 7 dias)
-instrumentation.ts                     Sentry no servidor e na edge
-instrumentation-client.ts              Sentry no navegador
+drizzle.config.ts                      points to DATABASE_URL_UNPOOLED
+neon.ts                                branch policy (7-day TTL)
+instrumentation.ts                     Sentry on the server and at the edge
+instrumentation-client.ts              Sentry in the browser
 sentry.server.config.ts · sentry.edge.config.ts
-AGENTS.md · CLAUDE.md                  regras para agentes de código neste repo
+AGENTS.md · CLAUDE.md                  rules for coding agents in this repo
 ```
 
 ---
 
-## 🚀 Como rodar localmente
+## 🚀 Running locally
 
-### Resumo
+### Summary
 
 ```bash
 git clone https://github.com/renatomf/nextjs-sandbox.git
 cd nextjs-sandbox
 npm install
 
-# crie o .env.local (modelo logo abaixo) e troque o project do trigger.config.ts
+# create .env.local (template below) and change the project in trigger.config.ts
 
-npm run db:push        # cria as tabelas no Neon
+npm run db:push        # creates the tables in Neon
 npm run dev            # terminal 1 → http://localhost:3000
-npm run trigger:dev    # terminal 2 → worker do agente
+npm run trigger:dev    # terminal 2 → agent worker
 ```
 
-São **dois processos**. Sem o `trigger:dev` rodando, o app abre, o jogo é criado, mas o chat nunca
-responde — quem responde é o worker.
+There are **two processes**. Without `trigger:dev` running, the app opens and the game gets created,
+but the chat never replies — the worker is what replies.
 
-### Pré-requisitos
+### Prerequisites
 
-| Item | Versão / observação |
+| Item | Version / note |
 | --- | --- |
-| **Node.js** | 24 (o worker roda em `node-24`; testado com `v24.20.0`) |
+| **Node.js** | 24 (the worker runs on `node-24`; tested with `v24.20.0`) |
 | **npm** | 11 |
-| **Contas** | Clerk, Neon, Trigger.dev, Daytona e Anthropic — obrigatórias |
-| **Opcionais** | Google AI Studio, Groq, Alibaba Model Studio, Sentry, [Ollama](https://ollama.com) |
+| **Accounts** | Clerk, Neon, Trigger.dev, Daytona and Anthropic — required |
+| **Optional** | Google AI Studio, Groq, Alibaba Model Studio, Sentry, [Ollama](https://ollama.com) |
 
-### 1. Variáveis de ambiente
+### 1. Environment variables
 
-Crie um `.env.local` na raiz. Ele é lido pelo Next.js, pelo `drizzle-kit` (via `@next/env`) e pelo
-worker em dev.
+Create a `.env.local` at the root. It's read by Next.js, by `drizzle-kit` (via `@next/env`) and by
+the worker in dev.
 
 ```bash
 # ─── Clerk ─────────────────────────────────────────────────────────────
@@ -605,7 +607,7 @@ NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/
 # ─── Neon ──────────────────────────────────────────────────────────────
 DATABASE_URL=
 DATABASE_URL_UNPOOLED=...
-NEON_BRANCH=                     # escrita pelo CLI do Neon; opcional
+NEON_BRANCH=                     # written by the Neon CLI; optional
 
 # ─── Trigger.dev ───────────────────────────────────────────────────────
 TRIGGER_SECRET_KEY=...
@@ -613,33 +615,33 @@ TRIGGER_SECRET_KEY=...
 # ─── Daytona ───────────────────────────────────────────────────────────
 DAYTONA_API_KEY=...
 
-# ─── Modelos ───────────────────────────────────────────────────────────
-ANTHROPIC_API_KEY=sk-ant-...     # obrigatória (Opus 5 + títulos)
+# ─── Models ────────────────────────────────────────────────────────────
+ANTHROPIC_API_KEY=sk-ant-...     # required (Opus 5 + titles)
 GOOGLE_GENERATIVE_AI_API_KEY=    # Gemini 3.8 Flash
 GROQ_API_KEY=                    # GPT-OSS 120B
 DASHSCOPE_API_KEY=               # Qwen 3.8 Max
 
-# ─── Sentry (opcional) ─────────────────────────────────────────────────
+# ─── Sentry (optional) ─────────────────────────────────────────────────
 SENTRY_DSN=
 NEXT_PUBLIC_SENTRY_DSN=
 NEXT_PUBLIC_SENTRY_ENVIRONMENT=development
 SENTRY_ORG=
 SENTRY_PROJECT=
-SENTRY_AUTH_TOKEN=               # só para subir source maps no build/deploy
+SENTRY_AUTH_TOKEN=               # only for uploading source maps on build/deploy
 ```
 
-### 3. Banco
+### 2. Database
 
 ```bash
 npm run db:push
 ```
 
-Cria `games` e `credit_ledger` a partir do `lib/db/schema.ts`. Rode de novo sempre que o schema
-mudar. **Nunca** `drizzle-kit generate` ou `drizzle-kit migrate` — veja o `AGENTS.md`.
+Creates `games` and `credit_ledger` from `lib/db/schema.ts`. Run it again whenever the schema
+changes. **Never** `drizzle-kit generate` or `drizzle-kit migrate` — see `AGENTS.md`.
 
-`npm run db:studio` abre o Drizzle Studio para inspecionar os dados.
+`npm run db:studio` opens Drizzle Studio so you can inspect the data.
 
-### 4. Subir os dois processos
+### 3. Start both processes
 
 ```bash
 # terminal 1
@@ -649,199 +651,200 @@ npm run dev
 npm run trigger:dev
 ```
 
-Na primeira vez, o `trigger:dev` pede login no navegador. Ele roda o worker **na sua máquina** e
-registra as tasks `game-chat`, `hello-world` e `sentry-error-test` no ambiente **Dev** do projeto. Em
-dev, o CLI carrega os arquivos `.env*` da raiz, então o mesmo `.env.local` serve para os dois
-processos. Se alguma variável faltar dentro do worker, cadastre em **Environment Variables → Dev** no
-dashboard do Trigger.dev.
+The first time, `trigger:dev` asks you to log in through the browser. It runs the worker **on your
+machine** and registers the `game-chat`, `hello-world` and `sentry-error-test` tasks in the project's
+**Dev** environment. In dev, the CLI loads the `.env*` files at the root, so the same `.env.local`
+works for both processes. If a variable is missing inside the worker, add it under **Environment
+Variables → Dev** in the Trigger.dev dashboard.
 
-### 5. Primeiro uso
+### 4. First use
 
-1. Abra `http://localhost:3000` e crie uma conta.
-2. Crie (ou escolha) uma **organização** — jogos, créditos e plano pertencem a ela.
-3. Descreva um jogo, escolha o modelo e envie. A organização começa com **US$ 1** de crédito.
-4. Responda às perguntas do agente. O preview aparece ao lado quando o primeiro turno termina.
+1. Open `http://localhost:3000` and create an account.
+2. Create (or pick) an **organization** — games, credits and the plan belong to it.
+3. Describe a game, pick the model and send. The organization starts with **US$ 1** of credit.
+4. Answer the agent's questions. The preview shows up next to the chat once the first turn finishes.
 
 ---
 
-## 🔑 Onde pegar cada chave
+## 🔑 Where to get each key
 
-### Clerk — login, organizações e billing
+### Clerk — sign-in, organizations and billing
 
-1. Crie uma aplicação em [dashboard.clerk.com](https://dashboard.clerk.com).
-2. **API keys** → copie a *Publishable key* (`pk_test_…`) e a *Secret key* (`sk_test_…`).
-3. **Organizations** → ative. Recomendado: **Membership required**, para que toda sessão tenha uma
-   organização ativa. O app exige `orgId` para criar jogos.
-4. **Billing** → ative para **organizações** e crie um plano com mensalidade (a página de billing o
-   apresenta como *Builder*). Qualquer plano com taxa-base conta como pago: cada mês pago concede
-   US$ 10, e períodos de teste grátis não contam. Em desenvolvimento, o Clerk usa um gateway de
-   pagamento de teste.
-5. As URLs de login (`/sign-in`, `/sign-up`) já existem no app; basta preencher as variáveis
-   `NEXT_PUBLIC_CLERK_*_URL`.
+1. Create an application at [dashboard.clerk.com](https://dashboard.clerk.com).
+2. **API keys** → copy the *Publishable key* (`pk_test_…`) and the *Secret key* (`sk_test_…`).
+3. **Organizations** → enable them. Recommended: **Membership required**, so every session has an
+   active organization. The app requires an `orgId` to create games.
+4. **Billing** → enable it for **organizations** and create a plan with a monthly fee (the billing
+   page presents it as *Builder*). Any plan with a base fee counts as paid: each paid month grants
+   US$ 10, and free trial periods don't count. In development, Clerk uses a test payment gateway.
+5. The sign-in URLs (`/sign-in`, `/sign-up`) already exist in the app; just fill in the
+   `NEXT_PUBLIC_CLERK_*_URL` variables.
 
 ### Neon — Postgres
 
-1. Crie um projeto em [console.neon.tech](https://console.neon.tech).
-2. **Connection details** → copie a string **pooled** (host com `-pooler`) para `DATABASE_URL` e a
-   **direta** para `DATABASE_URL_UNPOOLED`.
-3. Alternativa: com o CLI do Neon, `neon env pull` escreve as duas no `.env.local`, e
-   `neon checkout <nome>` cria um branch com TTL de 7 dias (política em `neon.ts`).
+1. Create a project at [console.neon.tech](https://console.neon.tech).
+2. **Connection details** → copy the **pooled** string (host with `-pooler`) into `DATABASE_URL` and
+   the **direct** one into `DATABASE_URL_UNPOOLED`.
+3. Alternative: with the Neon CLI, `neon env pull` writes both into `.env.local`, and
+   `neon checkout <name>` creates a branch with a 7-day TTL (policy in `neon.ts`).
 
-### Trigger.dev — o worker do agente
+### Trigger.dev — the agent worker
 
-1. Crie um projeto em [cloud.trigger.dev](https://cloud.trigger.dev).
-2. Copie o *Project ref* (`proj_…`) para o `trigger.config.ts`.
-3. **API keys** → ambiente **Dev** → copie a *Secret key* (`tr_dev_…`) para `TRIGGER_SECRET_KEY`.
-   Em produção, a chave é a do ambiente **Prod** (`tr_prod_…`).
+1. Create a project at [cloud.trigger.dev](https://cloud.trigger.dev).
+2. Copy the *Project ref* (`proj_…`) into `trigger.config.ts`.
+3. **API keys** → **Dev** environment → copy the *Secret key* (`tr_dev_…`) into `TRIGGER_SECRET_KEY`.
+   In production, use the **Prod** environment key (`tr_prod_…`).
 
-### Daytona — os sandboxes
+### Daytona — the sandboxes
 
-1. Crie uma conta em [app.daytona.io](https://app.daytona.io).
-2. **Dashboard → API Keys** → crie uma chave com permissão para criar, listar e apagar sandboxes.
-3. Cole em `DAYTONA_API_KEY`. O SDK lê a variável sozinho (`new Daytona()`).
+1. Create an account at [app.daytona.io](https://app.daytona.io).
+2. **Dashboard → API Keys** → create a key with permission to create, list and delete sandboxes.
+3. Paste it into `DAYTONA_API_KEY`. The SDK reads the variable on its own (`new Daytona()`).
 
-O limite de recursos e o aviso do preview dependem do *tier* da organização no Daytona (veja
-**Limits** no dashboard). Cada jogo usa um sandbox com a configuração padrão, e sandboxes ociosos
-param sozinhos.
+Resource limits and the preview warning depend on your organization's *tier* in Daytona (see
+**Limits** in the dashboard). Each game uses a sandbox with the default configuration, and idle
+sandboxes stop on their own.
 
-### Provedores de modelo
+### Model providers
 
-| Provedor | Onde | Variável |
+| Provider | Where | Variable |
 | --- | --- | --- |
 | Anthropic | [console.anthropic.com](https://console.anthropic.com) → API Keys | `ANTHROPIC_API_KEY` |
 | Google | [aistudio.google.com](https://aistudio.google.com) → Get API key | `GOOGLE_GENERATIVE_AI_API_KEY` |
 | Groq | [console.groq.com](https://console.groq.com) → API Keys | `GROQ_API_KEY` |
-| Alibaba Model Studio | console do Model Studio (DashScope, região internacional) → API Key | `DASHSCOPE_API_KEY` |
-| Ollama | local, sem chave: `ollama pull qwen3:8b` | — |
+| Alibaba Model Studio | Model Studio console (DashScope, international region) → API Key | `DASHSCOPE_API_KEY` |
+| Ollama | local, no key: `ollama pull qwen3:8b` | — |
 
-O provedor da Alibaba leria `ALIBABA_API_KEY` por padrão. O `lib/ai/models.ts` o cria com
-`DASHSCOPE_API_KEY` de propósito.
+The Alibaba provider reads `ALIBABA_API_KEY` by default. `lib/ai/models.ts` creates it with
+`DASHSCOPE_API_KEY` on purpose.
 
-### Sentry — opcional, mas recomendado
+### Sentry — optional, but recommended
 
-1. Crie um projeto **Next.js** em [sentry.io](https://sentry.io).
-2. Copie o DSN para `SENTRY_DSN` e `NEXT_PUBLIC_SENTRY_DSN`.
-3. Para source maps: `SENTRY_ORG`, `SENTRY_PROJECT` e um *Auth token* com escopo de releases em
-   `SENTRY_AUTH_TOKEN`. Sem o token, o build segue — só não sobe os mapas.
-4. Para testar o worker: rode a task `sentry-error-test` na página **Test** do dashboard do
-   Trigger.dev. Ela falha de propósito.
+1. Create a **Next.js** project at [sentry.io](https://sentry.io).
+2. Copy the DSN into `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN`.
+3. For source maps: `SENTRY_ORG`, `SENTRY_PROJECT` and an *Auth token* with the releases scope in
+   `SENTRY_AUTH_TOKEN`. Without the token, the build still succeeds — it just doesn't upload the
+   maps.
+4. To test the worker: run the `sentry-error-test` task on the **Test** page of the Trigger.dev
+   dashboard. It fails on purpose.
 
 ---
 
 ### Scripts
 
-| Script | O que faz |
+| Script | What it does |
 | --- | --- |
-| `dev` · `build` · `start` | O ciclo do Next.js |
-| `lint` · `typecheck` · `format` | ESLint · `tsc --noEmit` · Prettier (com plugin do Tailwind) |
-| `db:push` · `db:studio` | Drizzle Kit — sincroniza o schema · abre o Studio |
-| `trigger:dev` · `trigger:deploy` | Worker local · publica o worker |
+| `dev` · `build` · `start` | The Next.js cycle |
+| `lint` · `typecheck` · `format` | ESLint · `tsc --noEmit` · Prettier (with the Tailwind plugin) |
+| `db:push` · `db:studio` | Drizzle Kit — syncs the schema · opens Studio |
+| `trigger:dev` · `trigger:deploy` | Local worker · deploys the worker |
 
 ---
 
-## 🧠 Decisões de engenharia
+## 🧠 Engineering decisions
 
-**O worker compartilha o `lib/` com o Next.js.** Ferramentas, créditos e acesso ao Daytona são
-escritos uma vez só. O preço: o `lib/` não pode depender de nada que só exista no Next — por isso o
-`@sentry/node` em vez do `@sentry/nextjs`, o `@clerk/backend` em vez do `auth()` e a condição
-`react-server` no build do worker.
+**The worker shares `lib/` with Next.js.** Tools, credits and Daytona access are written only once.
+The price: `lib/` can't depend on anything that only exists in Next — hence `@sentry/node` instead
+of `@sentry/nextjs`, `@clerk/backend` instead of `auth()`, and the `react-server` condition in the
+worker build.
 
-**O SDK do Daytona fica fora do bundle.** Ele carrega `form-data` (upload) e `busboy` (download) por
-um alias de `require` próprio, que o esbuild não enxerga. Empacotado, ele não acha as duas
-dependências depois do deploy. Como `external`, é instalado com elas.
+**The Daytona SDK stays out of the bundle.** It loads `form-data` (upload) and `busboy` (download)
+through its own `require` alias, which esbuild can't see. Bundled, it can't find those two
+dependencies after deploy. As an `external`, it gets installed along with them.
 
-**O runtime do jogo é copiado para o build, não importado.** Os arquivos de `lib/games/runtime` são
-lidos com `fs` na hora de criar o sandbox; nada os importa, então o bundle os deixaria de fora. O
-`additionalFiles` os copia, e `legacyDevProcessCwdBehaviour: false` faz o `process.cwd()` apontar
-para o mesmo lugar em dev e em produção.
+**The game runtime is copied into the build, not imported.** The files in `lib/games/runtime` are
+read with `fs` when the sandbox is created; nothing imports them, so the bundle would leave them out.
+`additionalFiles` copies them, and `legacyDevProcessCwdBehaviour: false` makes `process.cwd()` point
+to the same place in dev and in production.
 
-**O banco é a fonte da verdade da conversa, não o cliente.** O cliente manda só a mensagem nova; o
-worker carrega a thread inteira a cada turno. Uma aba velha não consegue sobrescrever a conversa
-com uma versão desatualizada.
+**The database is the source of truth for the conversation, not the client.** The client sends only
+the new message; the worker loads the whole thread every turn. A stale tab can't overwrite the
+conversation with an outdated version.
 
-**A conversa e o cursor são gravados no mesmo UPDATE.** Um reload nunca vê a thread nova com o
-cursor do turno anterior — o que faria o stream repetir um turno já salvo.
+**The conversation and the cursor are written in the same UPDATE.** A reload never sees the new
+thread with the previous turn's cursor — which would make the stream replay a turn that's already
+saved.
 
-**O cursor é salvo mesmo num turno que falhou.** Assim um reload retoma depois dele, em vez de
-repetir o erro.
+**The cursor is saved even when a turn fails.** That way a reload resumes after it instead of
+repeating the error.
 
-**Respostas vazias somem da thread.** Um turno que falha antes de o modelo escrever qualquer coisa
-(provedor sobrecarregado, por exemplo) ainda gera uma mensagem de assistente sem conteúdo. O
-`withoutEmptyReplies` a remove, e a thread continua terminando na pergunta sem resposta.
+**Empty replies are dropped from the thread.** A turn that fails before the model writes anything
+(an overloaded provider, for example) still produces an assistant message with no content.
+`withoutEmptyReplies` removes it, so the thread still ends on the unanswered message.
 
-**O erro real vai para o Sentry, e o navegador recebe `An error occurred.`** Mensagens de provedor
-podem carregar chave, URL interna ou stack trace.
+**The real error goes to Sentry, and the browser gets `An error occurred.`** Provider messages can
+carry a key, an internal URL or a stack trace.
 
-**A escolha de modelo viaja na URL e é conferida em todo ponto.** O `?model=` do redirect passa pelo
-`isGameModelId`, e o `clientData` de cada mensagem passa por um `z.enum(GAME_MODEL_IDS)`. Nada que
-venha do navegador escolhe um modelo fora do catálogo.
+**The model choice travels in the URL and is checked at every step.** The redirect's `?model=` goes
+through `isGameModelId`, and each message's `clientData` goes through a `z.enum(GAME_MODEL_IDS)`.
+Nothing coming from the browser can pick a model outside the catalog.
 
-**Um erro de ferramenta volta para o modelo, não para o Sentry como erro.** O modelo quase sempre
-contorna sozinho: relê o arquivo, amplia o trecho, corrige o caminho. A falha vira um `warn` com a
-ferramenta, o caminho e a mensagem, suficiente para explicar um turno que deu errado.
+**A tool error goes back to the model, not to Sentry as an error.** The model almost always works
+around it on its own: it rereads the file, widens the snippet, fixes the path. The failure becomes a
+`warn` with the tool, the path and the message — enough to explain a turn that went wrong.
 
-**O `replace_text` usa `split`/`join`, não `String.replace`.** O `replace` interpretaria `$&` e `$1`
-dentro do código novo como padrões de substituição — e código JavaScript cheio de template strings
-tem `$` de sobra.
+**`replace_text` uses `split`/`join`, not `String.replace`.** `replace` would interpret `$&` and `$1`
+inside the new code as replacement patterns — and JavaScript code full of template strings has
+plenty of `$`.
 
-**O `ask_player` fica fora do `tools.ts`.** As ferramentas de arquivo são `server-only`; a pergunta
-precisa ter os tipos compartilhados com a UI (`InferUITool<typeof askPlayer>`).
+**`ask_player` lives outside `tools.ts`.** The file tools are `server-only`; the question needs its
+types shared with the UI (`InferUITool<typeof askPlayer>`).
 
-**Apagar um jogo começa pela linha do banco.** Depois vêm: fechar a sessão (nenhuma mensagem nova
-abre outra run), cancelar a run atual (que continuaria construindo — e cobrando — um jogo que não
-existe mais) e apagar os sandboxes pelo label `gameId`. Na ordem contrária, um turno em andamento
-poderia criar um sandbox novo para o jogo. E se um sandbox for criado depois que a linha sumiu, o
-próprio `createGameSandbox` o apaga: nenhum sandbox sobrevive ao seu jogo.
+**Deleting a game starts with the database row.** Then come: closing the session (so no new message
+opens another run), cancelling the current run (which would keep building — and charging for — a game
+that no longer exists) and deleting the sandboxes by the `gameId` label. In the reverse order, a turn
+in progress could create a new sandbox for the game. And if a sandbox is created after the row is
+gone, `createGameSandbox` itself deletes it: no sandbox outlives its game.
 
-**Os sandboxes são acordados sob demanda.** Ociosos, eles param sozinhos. A rota de preview e a
-primeira ferramenta de cada turno os acordam, e o servidor do jogo é reiniciado se o sandbox tiver
-reiniciado. Se o sandbox tiver sido apagado, um novo é criado a partir do runtime — e os arquivos
-antigos se perdem, o que fica registrado no Sentry.
+**Sandboxes are woken on demand.** When idle, they stop on their own. The preview route and each
+turn's first tool call wake them, and the game server is restarted if the sandbox has restarted. If
+the sandbox has been deleted, a new one is created from the runtime — and the old files are lost,
+which gets recorded in Sentry.
 
-**Toda escrita no ledger é idempotente.** A chave `(org_id, entry_key)` torna seguro repetir uma
-cobrança (retentativa do Trigger.dev) e reconciliar quantas vezes for preciso.
+**Every ledger write is idempotent.** The `(org_id, entry_key)` key makes it safe to repeat a charge
+(a Trigger.dev retry) and to reconcile as many times as needed.
 
-**A conta dos meses é feita em UTC.** O `addMonths` do `date-fns` usa o fuso do servidor e empurra
-limites de mês para o dia anterior a oeste de UTC. O `reconcile.ts` tem a própria aritmética,
-incluindo o caso do dia 31 em meses mais curtos.
+**Month math is done in UTC.** `date-fns`'s `addMonths` uses the server's time zone and pushes month
+boundaries back to the previous day west of UTC. `reconcile.ts` has its own arithmetic, including
+the case of the 31st in shorter months.
 
-**O Three.js está fixado em dois lugares que andam juntos:** o import map do
-`lib/games/runtime/index.html` e a constante `THREE_VERSION` das instruções do agente. A engine e o
-prompt foram escritos para a r186.
+**Three.js is pinned in two places that move together:** the import map in
+`lib/games/runtime/index.html` and the `THREE_VERSION` constant in the agent's instructions. The
+engine and the prompt were written for r186.
 
-**O system prompt é dividido por assunto.** São quatro mensagens de sistema — workflow, runtime,
-engine e design —, cada uma num arquivo, na ordem em que o agente precisa delas.
+**The system prompt is split by topic.** There are four system messages — workflow, runtime, engine
+and design — each in its own file, in the order the agent needs them.
 
-### O que deliberadamente não está aqui
+### What's deliberately not here
 
-- **Sem migrations.** O schema é sincronizado com `db:push` enquanto o projeto não tem
-  compromisso de compatibilidade.
-- **Sem API própria para o chat.** O navegador fala com o realtime do Trigger.dev com um token
-  escopado. O Next.js só abre sessões e emite tokens — não passa stream nenhum.
-- **Sem gerenciador de estado global.** A thread é do `useChat`, o saldo mora num contexto pequeno
-  alimentado pelo próprio stream, e o resto vem do servidor.
-- **Sem arquivos do jogo no banco.** O sandbox é a fonte da verdade dos arquivos; o banco guarda só
-  a conversa e o id do sandbox.
+- **No migrations.** The schema is synced with `db:push` while the project has no compatibility
+  commitments.
+- **No custom API for the chat.** The browser talks to Trigger.dev realtime with a scoped token.
+  Next.js only opens sessions and issues tokens — it doesn't relay any stream.
+- **No global state manager.** The thread belongs to `useChat`, the balance lives in a small context
+  fed by the stream itself, and the rest comes from the server.
+- **No game files in the database.** The sandbox is the source of truth for the files; the database
+  stores only the conversation and the sandbox id.
 
 ---
 
-## ⚠️ Limitações conhecidas
+## ⚠️ Known limitations
 
-- **O aviso de preview do Daytona.** Em organizações Tier 1 e 2, o proxy do Daytona mostra uma tela
-  de aviso na primeira visita a cada URL de preview. O app a exibe para você clicar e esconde a
-  página "Redirecting…" que vem depois. O aviso some ao subir para o Tier 3 ou com um proxy de
-  preview próprio que mande o header `X-Daytona-Skip-Preview-Warning: true`.
-- **Apagar o sandbox apaga o jogo.** Os arquivos só existem no sandbox; não há volume nem cópia no
-  banco. Um sandbox perdido volta como a página de boas-vindas.
-- **O Qwen3 8B só funciona em dev.** O provedor do Ollama aponta para `localhost`, que só é a sua
-  máquina quando o worker roda com `trigger:dev`.
-- **Preços fixos no código.** A tabela de `pricing.ts` é o preço de lista conferido em 2026-09-13 e
-  precisa de atualização manual — o Gemini, por exemplo, dobra de preço em 2027-01-01.
-- **Configuração presa ao projeto original.** O `project` do `trigger.config.ts`, os fallbacks de DSN
-  do Sentry e os defaults `ammodev`/`sandbox` de organização e projeto do Sentry apontam para o
-  ambiente do autor.
-- **Sem testes automatizados.** A verificação hoje é `typecheck`, `lint` e o Sentry.
-- **O Clerk está com chaves de desenvolvimento**, limitadas a ~100 usuários e usando os apps OAuth de
-  demonstração do próprio Clerk. Produção exige instância de produção e domínio próprio.
-- **`AI_PROVIDER`** pode aparecer em `.env.local` antigos, mas nenhum código a lê — o modelo é
-  escolhido por mensagem.
+- **Daytona's preview warning.** In Tier 1 and Tier 2 organizations, Daytona's proxy shows a warning
+  screen on the first visit to each preview URL. The app shows it so you can click through, and hides
+  the "Redirecting…" page that follows. The warning goes away on Tier 3, or with your own preview
+  proxy that sends the `X-Daytona-Skip-Preview-Warning: true` header.
+- **Deleting the sandbox deletes the game.** The files only exist in the sandbox; there's no volume
+  and no copy in the database. A lost sandbox comes back as the welcome page.
+- **Qwen3 8B only works in dev.** The Ollama provider points to `localhost`, which is only your
+  machine when the worker runs with `trigger:dev`.
+- **Prices are hardcoded.** The table in `pricing.ts` holds the list prices checked on 2026-09-13 and
+  needs manual updates — Gemini, for example, doubles in price on 2027-01-01.
+- **Configuration tied to the original project.** The `project` in `trigger.config.ts`, the Sentry
+  DSN fallbacks and the `ammodev`/`sandbox` Sentry organization and project defaults point to the
+  author's environment.
+- **No automated tests.** Verification today is `typecheck`, `lint` and Sentry.
+- **Clerk is running on development keys**, limited to ~100 users and using Clerk's own demo OAuth
+  apps. Production requires a production instance and your own domain.
+- **`AI_PROVIDER`** may show up in old `.env.local` files, but no code reads it — the model is chosen
+  per message.

@@ -101,12 +101,12 @@ export function AppSidebar({
         <div className="flex items-center gap-2 group-data-[collapsible=icon]:hidden">
           <Image
             src="/logo.svg"
-            alt="Sandbox"
+            alt="Playforge"
             width={20}
             height={20}
             className="size-5"
           />
-          <span className="font-logo text-base">Sandbox</span>
+          <span className="font-logo text-base">Playforge</span>
         </div>
         <SidebarTrigger className="ms-auto group-data-[collapsible=icon]:ms-0" />
       </SidebarHeader>

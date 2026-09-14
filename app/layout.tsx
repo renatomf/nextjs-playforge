@@ -21,11 +21,11 @@ const fontLogo = Fraunces({
 
 export const metadata: Metadata = {
   title: {
-    default: "Sandbox — Build 3D games with AI",
-    template: "%s · Sandbox",
+    default: "Playforge — Build 3D games with AI",
+    template: "%s · Playforge",
   },
   description:
-    "Describe a game and watch it come to life. Sandbox is an agentic three.js game builder that plans the scene, writes the code, and streams playable worlds from plain English.",
+    "Describe a game and watch it come to life. Playforge is an agentic three.js game builder that plans the scene, writes the code, and streams playable worlds from plain English.",
 }
 
 export default function RootLayout({
