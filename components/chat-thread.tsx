@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { useChat } from "@ai-sdk/react"
@@ -10,10 +10,12 @@ import {
   getToolName,
   isToolUIPart,
   lastAssistantMessageIsCompleteWithToolCalls,
+  type ChatTransport,
   type DynamicToolUIPart,
   type InferUITool,
   type ToolUIPart,
   type UIMessage,
+  type UIMessageChunk,
 } from "ai"
 import { cn } from "cn"
 import { CheckIcon, XIcon } from "lucide-react"
@@ -102,6 +104,122 @@ function isAwaitingAnswer(message: UIMessage | undefined) {
         isAskPlayerPart(part) &&
         part.state === "input-available"
     ) ?? false
+  )
+}
+
+// Drops what a new turn's stream replays from the turn before it. The
+// transport resumes from the last chunk this page read, so after a stop (or a
+// reply whose stream broke) it first replays the rest of that turn: deltas for
+// parts this stream never started, which useChat rejects ("Received
+// tool-input-delta for missing tool call") while the agent keeps building.
+// A turn's own chunks begin at its `start` chunk; data parts (the balance, the
+// out-of-credits notice) and errors, which a turn can send without one, pass.
+function fromTurnStart(stream: ReadableStream<UIMessageChunk>) {
+  let hasStarted = false
+
+  return stream.pipeThrough(
+    new TransformStream<UIMessageChunk, UIMessageChunk>({
+      transform(chunk, controller) {
+        if (chunk.type === "start") hasStarted = true
+
+        if (
+          hasStarted ||
+          chunk.type === "error" ||
+          chunk.type.startsWith("data-")
+        ) {
+          controller.enqueue(chunk)
+        }
+      },
+    })
+  )
+}
+
+// A saved reply's parts as the chunks that would stream them.
+function toChunks(message: UIMessage): UIMessageChunk[] {
+  return message.parts.flatMap((part, index): UIMessageChunk[] => {
+    const id = `${message.id}-${index}`
+
+    if (part.type === "step-start") return [{ type: "start-step" }]
+
+    if (part.type === "text") {
+      return [
+        { type: "text-start", id },
+        { type: "text-delta", id, delta: part.text },
+        { type: "text-end", id },
+      ]
+    }
+
+    if (part.type === "reasoning") {
+      return [
+        { type: "reasoning-start", id },
+        { type: "reasoning-delta", id, delta: part.text },
+        { type: "reasoning-end", id },
+      ]
+    }
+
+    if (!isToolUIPart(part)) return []
+
+    const { toolCallId } = part
+    const dynamic = part.type === "dynamic-tool"
+    const call: UIMessageChunk = {
+      type: "tool-input-available",
+      toolCallId,
+      toolName: getToolName(part),
+      input: part.input,
+      dynamic,
+    }
+
+    switch (part.state) {
+      case "output-available":
+        return [
+          call,
+          {
+            type: "tool-output-available",
+            toolCallId,
+            output: part.output,
+            dynamic,
+          },
+        ]
+      case "output-error":
+        return [
+          call,
+          {
+            type: "tool-output-error",
+            toolCallId,
+            errorText: part.errorText,
+            dynamic,
+          },
+        ]
+      default:
+        return [call]
+    }
+  })
+}
+
+// A reload resumes the reply still streaming. When that reply continues the
+// last saved one (the player answered its question), useChat rebuilds it from
+// the resumed stream alone and replaces the saved one: the question flashes,
+// then disappears. Put the saved parts back ahead of the resumed ones.
+function withSavedReply(
+  stream: ReadableStream<UIMessageChunk>,
+  saved: UIMessage | undefined
+) {
+  return stream.pipeThrough(
+    new TransformStream<UIMessageChunk, UIMessageChunk>({
+      transform(chunk, controller) {
+        controller.enqueue(chunk)
+
+        if (
+          chunk.type === "start" &&
+          saved?.role === "assistant" &&
+          chunk.messageId === saved.id
+        ) {
+          for (const savedChunk of toChunks(saved)) {
+            controller.enqueue(savedChunk)
+          }
+        }
+      },
+    })
   )
 }
 
@@ -287,6 +405,20 @@ export function ChatThread({
       }
     },
   })
+  // What useChat talks to: the transport, with each new turn's stream cut to
+  // the turn's own chunks, and a resumed reply kept whole. Stopping still goes
+  // through the transport itself.
+  const chatTransport = useMemo<ChatTransport<UIMessage>>(
+    () => ({
+      sendMessages: async (options) =>
+        fromTurnStart(await transport.sendMessages(options)),
+      reconnectToStream: async (options) => {
+        const stream = await transport.reconnectToStream(options)
+        return stream && withSavedReply(stream, initialMessages.at(-1))
+      },
+    }),
+    [transport, initialMessages]
+  )
   const {
     messages,
     sendMessage,
@@ -298,7 +430,7 @@ export function ChatThread({
   } = useChat({
     id,
     messages: initialMessages,
-    transport,
+    transport: chatTransport,
     // Pick up a reply that was still streaming when the page was reloaded.
     resume: initialSession !== undefined,
     // Once the player answers every pending question, continue the reply.

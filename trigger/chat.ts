@@ -31,6 +31,41 @@ function withoutEmptyReplies(messages: UIMessage[]) {
   )
 }
 
+// Copies the player's answers to a saved reply's pending tool calls (e.g.
+// ask_player) from the message that carries them: a copy of the reply slimmed
+// to the answered calls. Matched by tool call id, since the copy doesn't
+// always keep the reply's id. Returns whether it answers any of them.
+function applyAnswers(reply: UIMessage, incoming: UIMessage) {
+  const answers = new Map(
+    incoming.parts
+      .filter(isToolUIPart)
+      .filter(
+        (part) =>
+          part.state === "output-available" || part.state === "output-error"
+      )
+      .map((part) => [part.toolCallId, part])
+  )
+  let hasAnswer = false
+
+  reply.parts = reply.parts.map((part) => {
+    if (!isToolUIPart(part)) return part
+
+    const answer = answers.get(part.toolCallId)
+    if (!answer) return part
+
+    hasAnswer = true
+
+    // A settled call keeps its result; only a pending one takes the answer.
+    if (part.state !== "input-available") return part
+
+    return answer.state === "output-available"
+      ? { ...part, state: "output-available", output: answer.output }
+      : { ...part, state: "output-error", errorText: answer.errorText }
+  })
+
+  return hasAnswer
+}
+
 // One game = one chat: the chat id is the game id, and the game row's
 // `messages` stays the source of truth for the thread.
 export const gameChat = chat.agent({
@@ -45,20 +80,28 @@ export const gameChat = chat.agent({
   // prompt, requested with regenerate).
   hydrateMessages: async ({ chatId, trigger, incomingMessages }) => {
     const messages = withoutEmptyReplies(await getGameMessages(chatId))
+    const incoming = incomingMessages.at(-1)
+    const last = messages.at(-1)
 
-    // Save the new user message before the model streams, so a reload
-    // mid-reply still shows it.
-    if (upsertIncomingMessage(messages, { trigger, incomingMessages })) {
+    // Resume the last reply when the player answered its pending tool call
+    // (e.g. ask_player). The runtime merges the answer too, after this hook
+    // returns, but only into a message with the same id.
+    const isResume =
+      incoming?.role === "assistant" &&
+      last?.role === "assistant" &&
+      applyAnswers(last, incoming)
+
+    // Save the new user message, or the player's answer, before the model
+    // streams, so a reload mid-reply still shows it instead of asking the
+    // question again. An answer that matches no pending call isn't saved: its
+    // copy of the reply is slimmed to the answer and can't stand on its own.
+    if (
+      isResume ||
+      (incoming?.role !== "assistant" &&
+        upsertIncomingMessage(messages, { trigger, incomingMessages }))
+    ) {
       await saveGameMessages(chatId, messages)
     }
-
-    // Reply to a new user message, or resume the assistant message whose
-    // pending tool call (e.g. ask_player) the player just answered. The
-    // runtime merges their answer into it after this hook returns.
-    const last = messages.at(-1)
-    const isResume =
-      last?.role === "assistant" &&
-      incomingMessages.some((message) => message.id === last.id)
 
     // A resumed message still holds the earlier turns' tool calls (the
     // answered questions); the turn summary counts only the ones after them.
@@ -67,7 +110,7 @@ export const gameChat = chat.agent({
       isResume ? last.parts.filter(isToolUIPart).length : 0
     )
 
-    if (last?.role !== "user" && !isResume) {
+    if (messages.at(-1)?.role !== "user" && !isResume) {
       throw new Error("Nothing to reply to")
     }
 
