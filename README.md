@@ -424,29 +424,6 @@ Por isso o `lib/` compartilhado importa `@sentry/node` (o SDK do Next.js é cons
 divide o mesmo client) e por isso o `trigger.config.ts` usa a condição `react-server`: os módulos que
 importam `server-only` resolvem para a versão vazia dentro do worker.
 
-### Modelo de dados
-
-```sql
-games
-  id              uuid          pk, default random
-  org_id          text          not null      -- organização do Clerk (org_...)
-  title           text          not null
-  messages        jsonb         not null, default []  -- UIMessage[] do AI SDK
-  last_event_id   text                        -- cursor do stream do Trigger.dev
-  sandbox_id      text                        -- sandbox do Daytona
-  created_at      timestamptz   not null
-  updated_at      timestamptz   not null      -- $onUpdate
-  index games_org_id_created_at_idx (org_id, created_at)
-
-credit_ledger                                 -- append-only
-  id              uuid          pk, default random
-  org_id          text          not null      -- sem FK: organizações vivem no Clerk
-  entry_key       text          not null      -- step:<responseId> | month:<AAAA-MM>
-  amount          bigint        not null      -- bilionésimos de dólar, negativo = cobrança
-  created_at      timestamptz   not null
-  unique credit_ledger_org_id_entry_key_unique (org_id, entry_key)
-```
-
 ### Multi-tenancy e autenticação
 
 **A autenticação fica no recurso, não no proxy.** O `proxy.ts` roda `clerkMiddleware()` e mais nada.
@@ -614,20 +591,20 @@ worker em dev.
 
 ```bash
 # ─── Clerk ─────────────────────────────────────────────────────────────
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
-CLERK_SECRET_KEY=sk_test_...
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=...
+CLERK_SECRET_KEY=...
 NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
 NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
 NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/
 NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/
 
 # ─── Neon ──────────────────────────────────────────────────────────────
-DATABASE_URL=postgresql://USER:PASS@ep-xxx-pooler.REGION.aws.neon.tech/neondb?sslmode=require
-DATABASE_URL_UNPOOLED=postgresql://USER:PASS@ep-xxx.REGION.aws.neon.tech/neondb?sslmode=require
+DATABASE_URL=
+DATABASE_URL_UNPOOLED=...
 NEON_BRANCH=                     # escrita pelo CLI do Neon; opcional
 
 # ─── Trigger.dev ───────────────────────────────────────────────────────
-TRIGGER_SECRET_KEY=tr_dev_...
+TRIGGER_SECRET_KEY=...
 
 # ─── Daytona ───────────────────────────────────────────────────────────
 DAYTONA_API_KEY=...
@@ -646,40 +623,6 @@ SENTRY_ORG=
 SENTRY_PROJECT=
 SENTRY_AUTH_TOKEN=               # só para subir source maps no build/deploy
 ```
-
-> O `.gitignore` ignora `.env*` inteiro. Se quiser versionar um `.env.example`, acrescente
-> `!.env.example` ao `.gitignore`.
-
-#### Quem lê cada variável
-
-| Variável | Obrigatória | Next.js | Worker | `drizzle-kit` |
-| --- | :-: | :-: | :-: | :-: |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | ✅ | ✅ | | |
-| `CLERK_SECRET_KEY` | ✅ | ✅ | ✅ reconcilia créditos | |
-| `NEXT_PUBLIC_CLERK_*_URL` | ✅ | ✅ | | |
-| `DATABASE_URL` | ✅ | ✅ | ✅ | |
-| `DATABASE_URL_UNPOOLED` | ✅ | | | ✅ |
-| `TRIGGER_SECRET_KEY` | ✅ | ✅ abre sessões, emite tokens, cancela runs | | |
-| `DAYTONA_API_KEY` | ✅ | ✅ preview e exclusão | ✅ cria o sandbox e as ferramentas | |
-| `ANTHROPIC_API_KEY` | ✅ | ✅ título | ✅ Opus 5 | |
-| `GOOGLE_GENERATIVE_AI_API_KEY` · `GROQ_API_KEY` · `DASHSCOPE_API_KEY` | só para usar o modelo | | ✅ | |
-| `SENTRY_DSN` · `NEXT_PUBLIC_SENTRY_DSN` | recomendada | ✅ | ✅ | |
-| `SENTRY_ORG` · `SENTRY_PROJECT` · `SENTRY_AUTH_TOKEN` | só para source maps | build | deploy | |
-
-> ⚠️ **Sem `SENTRY_DSN` e `NEXT_PUBLIC_SENTRY_DSN`, os eventos vão para o projeto Sentry original**:
-> `sentry.*.config.ts`, `instrumentation-client.ts`, `trigger/init.ts` e `app/monitoring/route.ts` têm
-> um DSN de fallback fixo no código. Num fork, defina o seu ou troque o fallback.
-
-### 2. Aponte o Trigger.dev para o seu projeto
-
-O `trigger.config.ts` traz o id do projeto original:
-
-```ts
-project: "proj_idhywzazknmimwoeeklp",
-```
-
-Troque pelo *Project ref* do seu projeto (dashboard do Trigger.dev → **Project settings**). Sem isso,
-o `trigger:dev` tenta registrar o worker num projeto que não é seu.
 
 ### 3. Banco
 
@@ -714,19 +657,6 @@ dashboard do Trigger.dev.
 2. Crie (ou escolha) uma **organização** — jogos, créditos e plano pertencem a ela.
 3. Descreva um jogo, escolha o modelo e envie. A organização começa com **US$ 1** de crédito.
 4. Responda às perguntas do agente. O preview aparece ao lado quando o primeiro turno termina.
-
-### Problemas comuns
-
-| Sintoma | Causa provável | O que fazer |
-| --- | --- | --- |
-| `Unauthorized: no active organization` ao criar um jogo | nenhuma organização ativa na sessão | crie uma no `OrganizationSwitcher` ou ative *Membership required* no Clerk |
-| O chat fica carregando e nunca responde | o `trigger:dev` não está rodando, ou está em outro projeto | suba o worker; confira o `project` do `trigger.config.ts` |
-| `DATABASE_URL_UNPOOLED is not set` | falta a URL direta no `.env.local` | copie do Neon (ou `neon env pull`) |
-| Falha ao criar qualquer jogo, com qualquer modelo | falta a `ANTHROPIC_API_KEY` | o título sempre usa o Haiku |
-| "Out of credits" | saldo da organização zerado | assine o plano em `/billing` |
-| O preview mostra o aviso *Preview URL Warning* | tela do proxy do Daytona em organizações Tier 1 e 2 | clique em *Continue*; veja as [limitações](#️-limitações-conhecidas) |
-| O modelo Qwen3 8B (local) falha | o Ollama não está rodando, ou o worker não está na sua máquina | `ollama pull qwen3:8b` e `ollama serve`; só funciona com `trigger:dev` |
-| O worker não acha `form-data` ou `busboy` depois do deploy | o SDK do Daytona foi empacotado | mantenha o `external: ["@daytona/sdk"]` no `trigger.config.ts` |
 
 ---
 
@@ -793,20 +723,6 @@ O provedor da Alibaba leria `ALIBABA_API_KEY` por padrão. O `lib/ai/models.ts` 
    Trigger.dev. Ela falha de propósito.
 
 ---
-
-## 📦 Deploy
-
-O app e o worker são publicados **separadamente**.
-
-| Parte | Como | Variáveis |
-| --- | --- | --- |
-| **App Next.js** | qualquer host Node.js (`npm run build` + `npm run start`) | todas as da coluna Next.js, com `NEXT_PUBLIC_SENTRY_ENVIRONMENT=production` |
-| **Worker** | `npm run trigger:deploy` | cadastradas no ambiente **Prod** do dashboard do Trigger.dev: `DATABASE_URL`, `CLERK_SECRET_KEY`, `DAYTONA_API_KEY`, chaves dos modelos, `SENTRY_DSN` |
-| **Banco** | `npm run db:push` contra o branch de produção | `DATABASE_URL_UNPOOLED` do branch |
-| **Clerk** | instância de **produção** com domínio próprio | chaves `pk_live_…` / `sk_live_…` |
-
-No deploy do worker, `SENTRY_AUTH_TOKEN` precisa estar no ambiente **local** de quem roda o comando:
-o plugin de source maps roda no build, na sua máquina.
 
 ### Scripts
 
