@@ -8,6 +8,7 @@ import { CoinsIcon, MessageSquareIcon, SquarePenIcon } from "lucide-react"
 import { cn } from "cn"
 
 import { useCreditBalance } from "@/components/credit-balance"
+import { GameActionsMenu } from "@/components/game-actions-menu"
 import { Empty, EmptyDescription } from "@/components/ui/empty"
 import {
   Popover,
@@ -27,6 +28,7 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -35,6 +37,9 @@ import {
 import { formatDollars } from "@/lib/credits/format"
 import type { Game } from "@/lib/db/schema"
 
+// With closeOnSelect (the collapsed sidebar's popover), games get no options
+// menu: a dialog opened from it would close the popover, unmounting the
+// dialog with it.
 function GamesMenu({
   games,
   pathname,
@@ -63,7 +68,16 @@ function GamesMenu({
             {closeOnSelect ? (
               <PopoverClose nativeButton={false} render={button} />
             ) : (
-              button
+              <>
+                {button}
+                <GameActionsMenu
+                  gameId={game.id}
+                  title={game.title}
+                  side="right"
+                  align="start"
+                  trigger={<SidebarMenuAction showOnHover />}
+                />
+              </>
             )}
           </SidebarMenuItem>
         )

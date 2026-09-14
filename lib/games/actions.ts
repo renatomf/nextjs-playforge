@@ -2,18 +2,21 @@
 
 import { auth } from "@clerk/nextjs/server"
 import * as Sentry from "@sentry/nextjs"
-import { auth as triggerAuth } from "@trigger.dev/sdk"
+import { runs, sessions, auth as triggerAuth } from "@trigger.dev/sdk"
 import { chat, type ChatStartSessionParams } from "@trigger.dev/sdk/ai"
 import { generateId, generateText } from "ai"
+import { and, eq } from "drizzle-orm"
 import { refresh } from "next/cache"
 import { redirect } from "next/navigation"
 
 import { isGameModelId, type GameModelId } from "@/lib/ai/model-catalog"
 import { titleModel } from "@/lib/ai/models"
 import { hasCredits } from "@/lib/credits/reconcile"
+import { deleteGameSandboxes } from "@/lib/daytona/utils"
 import { db } from "@/lib/db"
 import { games } from "@/lib/db/schema"
 import { getGame } from "@/lib/games/queries"
+import { GAME_TITLE_MAX_LENGTH } from "@/lib/games/title"
 import type { gameChat } from "@/trigger/chat"
 
 const startGameChatSession =
@@ -143,4 +146,80 @@ export async function createGame(input: string, modelId: GameModelId) {
   // Re-render the (app) layout so the sidebar picks up the new game.
   refresh()
   redirect(`/games/${game.id}${search}`)
+}
+
+// The game id comes from the browser: only let the caller change games in
+// their own org. Returns that org.
+async function assertOwnsGame(gameId: string) {
+  const { userId, orgId } = await auth()
+
+  if (!userId || !orgId) {
+    throw new Error("Unauthorized: no active organization")
+  }
+
+  // Also a game in another org: getGame is scoped to the caller's.
+  if (!(await getGame(gameId))) {
+    throw new Error("Not found")
+  }
+
+  return orgId
+}
+
+export async function renameGame(gameId: string, input: string) {
+  const orgId = await assertOwnsGame(gameId)
+
+  // The rename form enforces the same rules; this is for anything else.
+  const title = typeof input === "string" ? input.trim() : ""
+
+  if (!title || title.length > GAME_TITLE_MAX_LENGTH) {
+    throw new Error("Invalid title")
+  }
+
+  await db
+    .update(games)
+    .set({ title })
+    .where(and(eq(games.id, gameId), eq(games.orgId, orgId)))
+
+  Sentry.logger.info("Game renamed", { "game.id": gameId, "org.id": orgId })
+
+  // Re-render the sidebar and the game page's header with the new title.
+  refresh()
+}
+
+// Deletes the game, then what ran for it: its chat run and its Daytona
+// sandboxes. The row goes first, so a turn still running can't give the game a
+// new sandbox (createGameSandbox deletes one whose game is gone). leavePage is
+// true when the caller is on the game's own page.
+export async function deleteGame(gameId: string, leavePage: boolean) {
+  const orgId = await assertOwnsGame(gameId)
+
+  await db
+    .delete(games)
+    .where(and(eq(games.id, gameId), eq(games.orgId, orgId)))
+
+  // Close the chat's session so no message starts another run, then cancel
+  // the current one, which would otherwise keep building (and charging for)
+  // a game that's gone. The game is already deleted, so a failure here is
+  // reported rather than shown to the player.
+  try {
+    const { currentRunId } = await sessions.retrieve(gameId)
+    await sessions.close(gameId, { reason: "game deleted" })
+    if (currentRunId) await runs.cancel(currentRunId)
+  } catch (error) {
+    Sentry.captureException(error, { tags: { game_id: gameId } })
+  }
+
+  try {
+    await deleteGameSandboxes(gameId)
+  } catch (error) {
+    // Listing failed, so the game's sandboxes are still up.
+    Sentry.captureException(error, { tags: { game_id: gameId } })
+  }
+
+  Sentry.logger.info("Game deleted", { "game.id": gameId, "org.id": orgId })
+
+  // Re-render the sidebar without the game. Its own page would now render not
+  // found, so a caller on it goes home instead.
+  refresh()
+  if (leavePage) redirect("/")
 }

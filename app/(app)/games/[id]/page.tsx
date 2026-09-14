@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server"
 import { notFound } from "next/navigation"
 
 import { GameChat } from "@/components/game-chat"
+import { GameHeader } from "@/components/game-header"
 import { isGameModelId } from "@/lib/ai/model-catalog"
 import { mintChatAccessToken } from "@/lib/games/actions"
 import { getGame } from "@/lib/games/queries"
@@ -29,12 +30,15 @@ export default async function Page(props: PageProps<"/games/[id]">) {
   const initialModelId = isGameModelId(model) ? model : undefined
 
   return (
-    <GameChat
-      id={game.id}
-      initialMessages={game.messages}
-      initialSession={initialSession}
-      initialModelId={initialModelId}
-      hasSandbox={game.sandboxId !== null}
-    />
+    <div className="flex h-svh flex-col">
+      <GameHeader gameId={game.id} title={game.title} />
+      <GameChat
+        id={game.id}
+        initialMessages={game.messages}
+        initialSession={initialSession}
+        initialModelId={initialModelId}
+        hasSandbox={game.sandboxId !== null}
+      />
+    </div>
   )
 }

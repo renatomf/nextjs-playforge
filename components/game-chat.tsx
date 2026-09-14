@@ -26,12 +26,12 @@ export function GameChat({ hasSandbox, ...props }: GameChatProps) {
   // means there is something to preview.
   const showPreview = hasSandbox || previewRevision > 0
 
-  // The one element with a fixed height: the thread and preview fill it, so a
-  // long conversation scrolls inside the message scroller, not the page.
-  // Always a panel group, so the thread stays mounted (and keeps its messages)
-  // when the preview appears.
+  // Fills the space the page leaves below its header: the thread and preview
+  // fill it, so a long conversation scrolls inside the message scroller, not
+  // the page. Always a panel group, so the thread stays mounted (and keeps its
+  // messages) when the preview appears.
   return (
-    <div className="h-svh">
+    <div className="min-h-0 flex-1">
       <ResizablePanelGroup>
         <ResizablePanel id="thread">
           <ChatThread

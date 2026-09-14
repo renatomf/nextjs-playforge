@@ -15,26 +15,82 @@ export const GAME_DIR = "/home/daytona/game"
 export const GAME_PORT = 8080
 
 // Creates the game's sandbox, seeds its files from lib/games/runtime, and
-// saves the sandbox id on the game row.
+// saves the sandbox id on the game row. A sandbox that doesn't end up on the
+// row is deleted, so no sandbox outlives its game.
 export async function createGameSandbox(gameId: string) {
   const startedAt = Date.now()
   const sandbox = await daytona.create({ labels: { gameId } })
 
-  const { files } = await seedGameDir(sandbox, GAME_DIR)
+  try {
+    const { files } = await seedGameDir(sandbox, GAME_DIR)
 
-  await db
-    .update(games)
-    .set({ sandboxId: sandbox.id })
-    .where(eq(games.id, gameId))
+    const saved = await db
+      .update(games)
+      .set({ sandboxId: sandbox.id })
+      .where(eq(games.id, gameId))
+      .returning({ id: games.id })
 
-  Sentry.logger.info("Game sandbox created", {
-    "game.id": gameId,
-    "sandbox.id": sandbox.id,
-    "sandbox.seed_files": files,
-    duration_ms: Date.now() - startedAt,
+    // The game was deleted while this sandbox was being made, after
+    // deleteGameSandboxes had already swept the game's sandboxes.
+    if (saved.length === 0) {
+      throw new Error("Game not found")
+    }
+
+    Sentry.logger.info("Game sandbox created", {
+      "game.id": gameId,
+      "sandbox.id": sandbox.id,
+      "sandbox.seed_files": files,
+      duration_ms: Date.now() - startedAt,
+    })
+
+    return { sandbox }
+  } catch (error) {
+    await daytona.delete(sandbox).catch((deleteError) =>
+      Sentry.captureException(deleteError, {
+        tags: { game_id: gameId, sandbox_id: sandbox.id },
+      })
+    )
+    throw error
+  }
+}
+
+// Deletes every sandbox made for the game, found by the label
+// createGameSandbox sets: the one on its row, and any a replaced or failed
+// create left behind. A sandbox that fails to delete is reported, not thrown.
+export async function deleteGameSandboxes(gameId: string) {
+  const sandboxes: Sandbox[] = []
+
+  for await (const sandbox of daytona.list({ labels: { gameId } })) {
+    if (sandbox.state !== "destroyed" && sandbox.state !== "destroying") {
+      sandboxes.push(sandbox)
+    }
+  }
+
+  const results = await Promise.allSettled(
+    sandboxes.map((sandbox) => daytona.delete(sandbox))
+  )
+
+  let failed = 0
+  results.forEach((result, index) => {
+    // Already gone is what we wanted.
+    if (
+      result.status === "fulfilled" ||
+      result.reason instanceof DaytonaNotFoundError
+    ) {
+      return
+    }
+
+    failed++
+    Sentry.captureException(result.reason, {
+      tags: { game_id: gameId, sandbox_id: sandboxes[index].id },
+    })
   })
 
-  return { sandbox }
+  Sentry.logger[failed ? "error" : "info"]("Game sandboxes deleted", {
+    "game.id": gameId,
+    "sandbox.count": sandboxes.length,
+    "sandbox.failed": failed,
+  })
 }
 
 // Idle sandboxes auto-stop, so wake the game's sandbox before using it.
