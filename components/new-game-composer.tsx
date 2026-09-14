@@ -35,13 +35,18 @@ export function NewGameComposer() {
         onModelChange={setModelId}
       />
       <div className="flex flex-wrap justify-center gap-2">
-        {suggestions.map(({ icon: Icon, label }) => (
+        {suggestions.map(({ icon: Icon, label, prompt: suggestion }) => (
           <Button
             key={label}
             type="button"
             variant="outline"
             className="rounded-full font-normal text-muted-foreground"
-            onClick={() => setPrompt(label)}
+            disabled={isPending}
+            // Show the full prompt in the composer while the game is created.
+            onClick={() => {
+              setPrompt(suggestion)
+              handleSubmit(suggestion)
+            }}
           >
             <Icon data-icon="inline-start" />
             {label}
